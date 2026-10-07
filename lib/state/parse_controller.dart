@@ -98,6 +98,8 @@ class ParseController extends ChangeNotifier {
     video = null;
     batch = null;
     dash = null;
+    referenceTitle = null;
+    referenceError = null;
     selectedPages.clear();
     selectedKeys.clear();
     notifyListeners();
@@ -220,6 +222,8 @@ class ParseController extends ChangeNotifier {
     batch = value;
     video = null;
     dash = null;
+    referenceTitle = null;
+    referenceError = null;
     sourceKind = null;
     sourceId = null;
     _selectAllDefault();
@@ -235,6 +239,76 @@ class ParseController extends ChangeNotifier {
     qualityName = qualityLabel(quality);
     audioId = null;
     applyDefaultOptions();
+  }
+
+  /// 批量下载时作为「可选项参考」的视频标题（在选项面板上说明来源）
+  String? referenceTitle;
+
+  /// 参考视频解析失败的原因，用于在面板上向用户解释为什么退回通用档位
+  String? referenceError;
+
+  /// 批量列表中第一个被选中的条目
+  MediaItem? get firstSelectedItem {
+    for (final item in batch?.items ?? const <MediaItem>[]) {
+      if (isBatchSelected(item)) return item;
+    }
+    return null;
+  }
+
+  /// 解析批量下载的「参考视频」，取回真实的清晰度 / 编码 / 音轨列表。
+  ///
+  /// 批量下载共用一套设置，逐个解析 N 个视频既慢也没有意义，所以只解析第一个选中项：
+  /// 选项面板据此列出**该视频确实支持**的档位（避免出现「视频没有 8K 却给出 8K 选项」），
+  /// 其余视频在下载时由 `DashInfo.pickVideo` / `pickAudio` 自动回退到各自可用的档位。
+  ///
+  /// 返回 false 表示没取到数据（未登录 / 会员内容 / 网络异常），
+  /// 调用方应退回通用档位并向用户说明原因。
+  Future<bool> loadBatchReference() async {
+    final item = firstSelectedItem;
+    referenceTitle = item?.title;
+    referenceError = null;
+    dash = null;
+    if (item == null) {
+      referenceError = '没有选中任何视频';
+      notifyListeners();
+      return false;
+    }
+    try {
+      var cid = item.cid;
+      if (cid <= 0) {
+        // UP 主投稿 / 合集接口不返回 cid，先补一次详情查询
+        if (item.bvid.isEmpty) throw ApiException(-1, '缺少 cid 与 bvid，无法获取播放地址');
+        cid = (await api.videoDetail(item.bvid)).cid;
+      }
+      if (cid <= 0) throw ApiException(-1, '无法获取该视频的 cid，可能已下架');
+
+      dash = await api.playUrl(
+        btype: item.btype,
+        cid: cid,
+        bvid: item.bvid,
+        epId: item.epId,
+        quality: settings.defaultQuality,
+      );
+
+      final available = availableQualities;
+      quality = available.contains(settings.defaultQuality)
+          ? settings.defaultQuality
+          : (available.isEmpty ? settings.defaultQuality : available.first);
+      qualityName = qualityLabel(quality);
+      codec = settings.codecPreference;
+      final codecs = availableCodecs;
+      if (codecs.isNotEmpty && !codecs.contains(codec)) codec = codecs.first;
+      final audios = availableAudios;
+      audioId = audios.isEmpty ? null : audios.first.id;
+      notifyListeners();
+      return true;
+    } catch (exception) {
+      dash = null;
+      referenceError = exception is ApiException ? exception.message : '$exception';
+      AppLog.e('Parse', '批量参考视频解析失败', exception);
+      notifyListeners();
+      return false;
+    }
   }
 
   String _keyOf(MediaItem item) => '${item.bvid}_${item.cid}_${item.epId ?? 0}';
@@ -457,6 +531,8 @@ class ParseController extends ChangeNotifier {
     video = null;
     batch = null;
     dash = null;
+    referenceTitle = null;
+    referenceError = null;
     error = null;
     message = null;
     selectedPages.clear();

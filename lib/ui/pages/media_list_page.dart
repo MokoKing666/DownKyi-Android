@@ -105,13 +105,27 @@ class MediaListPage extends StatelessWidget {
   }
 
   Future<void> _download(BuildContext context, ParseController parse) async {
-    // 批量入口没有「解析结果页」，这里先弹选项面板，让用户挑清晰度 / 编码 / 下载内容
-    final confirmed = await showDownloadOptionsSheet(context, count: parse.selectedCount);
+    final selected = parse.selectedCount;
+    if (selected == 0) return;
+
+    // 先解析第一个选中项，取回真实的清晰度 / 编码 / 音轨列表，
+    // 选项面板才不会列出「该视频并不支持」的档位（例如视频没有 8K 却给出 8K）
+    tdLoadingShow(context, text: '解析可选项');
+    final referenceLoaded = await parse.loadBatchReference();
+    tdLoadingHide();
+    if (!context.mounted) return;
+
+    final confirmed = await showDownloadOptionsSheet(
+      context,
+      count: selected,
+      referenceLoaded: referenceLoaded,
+    );
     if (!confirmed || !context.mounted) return;
     if (!parse.wantVideo && !parse.wantAudio) {
       tdToast(context, '请至少选择「视频」或「音频」');
       return;
     }
+
     tdLoadingShow(context, text: '创建任务');
     final count = await parse.enqueueBatch();
     tdLoadingHide();

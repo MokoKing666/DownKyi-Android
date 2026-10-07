@@ -5,35 +5,45 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../../core/constants.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
-import 'choice.dart';
+import 'download_options.dart';
 
-/// 批量下载前的选项弹窗：清晰度 / 编码 / 下载内容。
+/// 批量下载前的设置弹窗。
 ///
-/// 批量列表（收藏夹 / 合集 / 观看历史 / 稍后再看 / 整季番剧）在创建任务前
-/// 并没有逐个视频的 playurl 信息，所以这里给的是通用清晰度列表；
-/// 选到某个视频不支持的档位不会失败——服务端会回退到该视频实际可用的档位
-/// （见 `DashInfo.pickVideo` 的兜底逻辑）。
+/// 与「解析结果页」共用 [DownloadOptionsPanel]，选项来自
+/// [ParseController.loadBatchReference] 取回的**真实 playurl 数据**，
+/// 所以不会把视频并不支持的清晰度列出来。
 ///
-/// 返回 true 表示用户点了「确认并创建任务」。
+/// [referenceLoaded] 为 false 表示参考视频没解析成功（未登录 / 会员内容 / 网络异常），
+/// 此时退回通用档位并明确提示用户。
 Future<bool> showDownloadOptionsSheet(
   BuildContext context, {
   required int count,
+  required bool referenceLoaded,
 }) async {
   final parse = context.read<ParseController>();
   final confirmed = await showModalBottomSheet<bool>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => _DownloadOptionsSheet(parse: parse, count: count),
+    builder: (_) => _DownloadOptionsSheet(
+      parse: parse,
+      count: count,
+      referenceLoaded: referenceLoaded,
+    ),
   );
   return confirmed ?? false;
 }
 
 class _DownloadOptionsSheet extends StatefulWidget {
-  const _DownloadOptionsSheet({required this.parse, required this.count});
+  const _DownloadOptionsSheet({
+    required this.parse,
+    required this.count,
+    required this.referenceLoaded,
+  });
 
   final ParseController parse;
   final int count;
+  final bool referenceLoaded;
 
   @override
   State<_DownloadOptionsSheet> createState() => _DownloadOptionsSheetState();
@@ -42,15 +52,9 @@ class _DownloadOptionsSheet extends StatefulWidget {
 class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
   ParseController get parse => widget.parse;
 
-  /// 清晰度：用通用表（去掉几乎用不到的 240P），
-  /// 当前档位若不在表里则补到最前面，避免出现「一个都没选中」。
-  List<int> get _qualities {
-    final list = BiliConst.qualityNames.keys.where((key) => key != 6).toList();
-    if (!list.contains(parse.quality)) list.insert(0, parse.quality);
-    return list;
-  }
-
-  void _update(VoidCallback change) => setState(change);
+  /// 参考视频解析失败时的通用档位（去掉几乎用不到的 240P）
+  List<int> get _genericQualities =>
+      BiliConst.qualityNames.keys.where((key) => key != 6).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +66,7 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
       ),
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.86,
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
       ),
       child: SafeArea(
         top: false,
@@ -76,11 +80,13 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _buildQuality(),
+                    if (widget.referenceLoaded) _buildReferenceNote() else _buildFailureNote(),
                     const SizedBox(height: TdSpacer.medium),
-                    _buildCodec(),
-                    const SizedBox(height: TdSpacer.medium),
-                    _buildContents(),
+                    DownloadOptionsPanel(
+                      parse: parse,
+                      onChanged: () => setState(() {}),
+                      fallbackQualities: widget.referenceLoaded ? null : _genericQualities,
+                    ),
                     const SizedBox(height: TdSpacer.small),
                   ],
                 ),
@@ -110,7 +116,12 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(TdSpacer.medium, TdSpacer.medium, TdSpacer.medium, TdSpacer.small),
+      padding: const EdgeInsets.fromLTRB(
+        TdSpacer.medium,
+        TdSpacer.medium,
+        TdSpacer.medium,
+        TdSpacer.small,
+      ),
       child: Row(
         children: <Widget>[
           Expanded(child: Text('下载设置', style: TdText.titleSmall)),
@@ -125,94 +136,42 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
     );
   }
 
-  Widget _buildQuality() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text('清晰度', style: TdText.titleSmall),
-        const SizedBox(height: TdSpacer.xs),
-        TdChoiceGroup<int>(
-          items: _qualities,
-          selected: parse.quality,
-          labelBuilder: parse.qualityLabel,
-          onSelect: (value) => _update(() => parse.setQuality(value)),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '超出视频实际档位时会自动回退到该视频的最高可用清晰度',
-          style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
-        ),
-      ],
+  Widget _buildReferenceNote() {
+    return _note(
+      color: TdPalette.brandLight,
+      title: '可选项按参考视频解析：${parse.referenceTitle ?? ''}',
+      body: '下面列出的都是该视频真实支持的档位。其余视频若没有同一档位，'
+          '会自动回退到各自可用的最高清晰度与最佳音轨。',
     );
   }
 
-  Widget _buildCodec() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text('视频编码', style: TdText.titleSmall),
-        const SizedBox(height: TdSpacer.xs),
-        TdChoiceGroup<String>(
-          items: const <String>['avc', 'hevc', 'av1'],
-          selected: parse.codec,
-          labelBuilder: (value) => switch (value) {
-            'hevc' => 'HEVC / H.265',
-            'av1' => 'AV1',
-            _ => 'AVC / H.264',
-          },
-          onSelect: (value) => _update(() => parse.setCodec(value)),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '同档位没有所选编码时，会自动改用该档位可用的编码；音轨自动选择最高码率',
-          style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
-        ),
-      ],
+  Widget _buildFailureNote() {
+    final reason = parse.referenceError;
+    return _note(
+      color: TdPalette.warningLight,
+      title: '未能解析参考视频的可选项',
+      body: '${reason == null ? '' : '$reason；'}'
+          '下面列出的是通用档位。每个视频下载时都会自动回退到它实际支持的档位，'
+          '常见的失败原因是未登录或需要大会员。',
     );
   }
 
-  Widget _buildContents() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text('下载内容', style: TdText.titleSmall),
-        const SizedBox(height: TdSpacer.xxs),
-        TdCheckRow(
-          title: '视频',
-          value: parse.wantVideo,
-          onChanged: (value) => _update(() => parse.wantVideo = value),
-        ),
-        TdCheckRow(
-          title: '音频',
-          value: parse.wantAudio,
-          onChanged: (value) => _update(() => parse.wantAudio = value),
-        ),
-        TdCheckRow(
-          title: '封面',
-          value: parse.wantCover,
-          onChanged: (value) => _update(() => parse.wantCover = value),
-        ),
-        TdCheckRow(
-          title: '弹幕',
-          description: '格式：${parse.settings.danmakuFormat.label}',
-          value: parse.wantDanmaku,
-          onChanged: (value) => _update(() => parse.wantDanmaku = value),
-        ),
-        TdCheckRow(
-          title: '字幕',
-          description: '优先下载中文（CC）字幕，转为 srt',
-          value: parse.wantSubtitle,
-          onChanged: (value) => _update(() => parse.wantSubtitle = value),
-        ),
-        if (!parse.wantVideo && !parse.wantAudio)
-          Padding(
-            padding: const EdgeInsets.only(top: TdSpacer.xs),
-            child: Text(
-              '请至少选择「视频」或「音频」',
-              style: TdText.bodySmall.copyWith(color: TdPalette.warning),
-            ),
-          ),
-      ],
+  Widget _note({required Color color, required String title, required String body}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(TdSpacer.small),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(TdRadius.medium),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: TdText.bodySmall.copyWith(fontWeight: FontWeight.w500)),
+          const SizedBox(height: 3),
+          Text(body, style: TdText.bodySmall.copyWith(color: TdPalette.textSecondary)),
+        ],
+      ),
     );
   }
 }

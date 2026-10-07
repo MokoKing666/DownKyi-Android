@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.3.0（versionCode 5） |
+| 版本 | v1.3.1（versionCode 6） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,27 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.3.1
+
+**修复**
+
+- **批量下载的清晰度选项是「假」的**：v1.3.0 为了让批量入口也能选清晰度，
+  直接给了一张通用档位表，结果**视频没有 8K 也会列出 8K**；
+  而且这张表和「解析结果页」是两套实现，容易各自漂移。
+  现在改为**下载前先解析一次**：取第一个选中项的真实 `playurl`，
+  用它的 `dash` 数据填充选项，只列出该视频确实支持的清晰度与该档位真实存在的编码。
+  其余视频在下载时由 `DashInfo.pickVideo` / `pickAudio` 自动回退到各自可用的档位。
+- **批量下载面板缺少「音频」选项**：现在与解析结果页完全一致，
+  可以挑选具体音轨（含 Hi-Res 无损 / 杜比全景声）。
+- 参考视频解析失败时（未登录 / 会员内容 / 网络异常）不再静默给出假档位，
+  而是明确提示失败原因，并说明已退回通用档位。
+
+**改进**
+
+- 把「解析结果页」的清晰度 / 编码 / 音频 / 下载内容四个分区抽成共享组件
+  `DownloadOptionsPanel`，解析结果页与批量下载弹窗共用同一份实现
+  （`card` 参数区分卡片样式），两个入口的选项逻辑不会再各自漂移。
 
 ### v1.3.0
 
@@ -201,7 +222,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.3.0-arm64-v8a.apk
+adb install -r DownKyi-v1.3.1-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
