@@ -1,0 +1,401 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
+
+import '../../core/constants.dart';
+import '../../data/bili_api.dart';
+import '../../data/http_client.dart';
+import '../../data/models.dart';
+import '../../state/login_controller.dart';
+import '../../state/parse_controller.dart';
+import '../td.dart';
+import 'login_page.dart';
+import 'media_list_page.dart';
+import 'video_detail_page.dart';
+
+/// 首页：粘贴链接解析 + 常用入口。
+class ParsePage extends StatefulWidget {
+  const ParsePage({super.key});
+
+  @override
+  State<ParsePage> createState() => _ParsePageState();
+}
+
+class _ParsePageState extends State<ParsePage> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _parse() async {
+    final input = _controller.text.trim();
+    if (input.isEmpty) {
+      tdToast(context, '请先粘贴视频链接或 BV 号');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    final controller = context.read<ParseController>();
+    final success = await controller.parse(input);
+    if (!mounted) return;
+    if (!success) {
+      tdToastError(context, controller.error ?? '解析失败');
+      return;
+    }
+    if (controller.video != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const VideoDetailPage()),
+      );
+    } else if (controller.batch != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const MediaListPage()),
+      );
+    }
+  }
+
+  Future<void> _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) {
+      tdToast(context, '剪贴板为空');
+      return;
+    }
+    _controller.text = text;
+    setState(() {});
+  }
+
+  Future<void> _openLink(String input) async {
+    _controller.text = input;
+    await _parse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parse = context.watch<ParseController>();
+    final login = context.watch<LoginController>();
+
+    return Container(
+      color: TdPalette.pageBackground,
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: TdSpacer.large),
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(TdSpacer.medium, TdSpacer.large, TdSpacer.medium, TdSpacer.small),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(AppInfo.name, style: TdText.display.copyWith(fontSize: 26)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '解析 B 站视频 / 番剧 / 收藏夹 / 合集，支持多线程下载与断点续传',
+                          style: TdText.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  TdLabel(login.isLogin ? '已登录' : '未登录',
+                      color: login.isLogin ? TdPalette.success : TdPalette.warning,
+                      background: login.isLogin ? TdPalette.successLight : TdPalette.warningLight),
+                ],
+              ),
+            ),
+            TdSection(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    decoration: BoxDecoration(
+                      color: TdPalette.gray1,
+                      borderRadius: BorderRadius.circular(TdRadius.medium),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
+                    child: TextField(
+                      controller: _controller,
+                      maxLines: 4,
+                      minLines: 3,
+                      style: TdText.bodyMedium,
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        hintText: '粘贴视频链接 / BV 号 / ep、ss 号 / 收藏夹 / 合集链接',
+                        hintStyle: TextStyle(color: TdPalette.textPlaceholder, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: TdSpacer.small),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: TDButton(
+                          text: '从剪贴板粘贴',
+                          theme: TDButtonTheme.light,
+                          type: TDButtonType.fill,
+                          size: TDButtonSize.medium,
+                          isBlock: true,
+                          onTap: _paste,
+                        ),
+                      ),
+                      const SizedBox(width: TdSpacer.small),
+                      Expanded(
+                        child: TDButton(
+                          text: parse.loading ? '解析中…' : '开始解析',
+                          theme: TDButtonTheme.primary,
+                          size: TDButtonSize.medium,
+                          isBlock: true,
+                          disabled: parse.loading,
+                          onTap: _parse,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: TdSpacer.small),
+            TdSection(
+              title: '常用入口',
+              child: Wrap(
+                spacing: TdSpacer.small,
+                runSpacing: TdSpacer.small,
+                children: <Widget>[
+                  _shortcut(
+                    icon: Icons.star_outline,
+                    title: '我的收藏夹',
+                    onTap: () => _openFavorites(context),
+                  ),
+                  _shortcut(
+                    icon: Icons.history,
+                    title: '观看历史',
+                    onTap: () => _openHistory(context),
+                  ),
+                  _shortcut(
+                    icon: Icons.watch_later_outlined,
+                    title: '稍后再看',
+                    onTap: () => _openToView(context),
+                  ),
+                  _shortcut(
+                    icon: Icons.playlist_play,
+                    title: 'UP 主合集',
+                    onTap: () => _promptMid(context),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: TdSpacer.small),
+            TdSection(
+              title: '账号',
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      login.isLogin
+                          ? '当前账号：${login.navInfo?.uname ?? '已登录'}'
+                          : '未登录。登录后可下载 1080P+ / 4K 及会员内容',
+                      style: TdText.bodyMedium,
+                    ),
+                  ),
+                  TDButton(
+                    text: login.isLogin ? '切换' : '去登录',
+                    theme: TDButtonTheme.primary,
+                    type: TDButtonType.text,
+                    size: TDButtonSize.small,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const LoginPage()),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: TdSpacer.small),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+              child: Text(
+                AppInfo.disclaimer,
+                style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _shortcut({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(TdRadius.large),
+      child: Container(
+        width: 150,
+        padding: const EdgeInsets.all(TdSpacer.small),
+        decoration: BoxDecoration(
+          color: TdPalette.gray1,
+          borderRadius: BorderRadius.circular(TdRadius.large),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, size: 20, color: TdPalette.brand),
+            const SizedBox(width: TdSpacer.xs),
+            Expanded(
+              child: Text(title, style: TdText.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            Icon(Icons.chevron_right, size: 16, color: TdPalette.gray6),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFavorites(BuildContext context) async {
+    final login = context.read<LoginController>();
+    final mid = login.navInfo?.mid ?? 0;
+    if (mid == 0) {
+      tdToast(context, '请先登录后再查看收藏夹');
+      return;
+    }
+    final api = context.read<ParseController>().api;
+    try {
+      tdLoadingShow(context, text: '读取收藏夹');
+      final folders = await api.favFolders(mid);
+      tdLoadingHide();
+      if (!mounted) return;
+      if (folders.isEmpty) {
+        tdToast(context, '没有找到收藏夹');
+        return;
+      }
+      final selected = await showModalBottomSheet<FavFolder>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => Container(
+          decoration: BoxDecoration(
+            color: TdPalette.container,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+          ),
+          padding: const EdgeInsets.all(TdSpacer.medium),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('选择收藏夹', style: TdText.titleSmall),
+              const SizedBox(height: TdSpacer.small),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: <Widget>[
+                    for (final folder in folders)
+                      TDCell(
+                        title: folder.title,
+                        note: '${folder.count} 个视频',
+                        arrow: true,
+                        onClick: (cell) => Navigator.of(sheetContext).pop(folder),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (selected == null) return;
+      await _openLink('https://www.bilibili.com/medialist/detail/ml${selected.id}?fid=${selected.id}');
+    } catch (error) {
+      tdLoadingHide();
+      if (!mounted) return;
+      tdToastError(context, '读取收藏夹失败：${_describeError(error)}');
+    }
+  }
+
+  Future<void> _openHistory(BuildContext context) async {
+    await _runBatch(context, (controller) async {
+      final items = await controller.api.history();
+      if (items.isEmpty) return null;
+      return BatchResult(title: '观看历史', items: items);
+    }, loginRequired: true);
+  }
+
+  Future<void> _openToView(BuildContext context) async {
+    await _runBatch(context, (controller) async {
+      final items = await controller.api.toView();
+      if (items.isEmpty) return null;
+      return BatchResult(title: '稍后再看', items: items);
+    }, loginRequired: true);
+  }
+
+  Future<void> _promptMid(BuildContext context) async {
+    final controller = TextEditingController();
+    final mid = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: TdPalette.container,
+        title: Text('输入 UP 主 UID', style: TdText.titleSmall),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(hintText: '例如 2（可在空间地址里找到）'),
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (mid == null || mid.isEmpty) return;
+    if (!mounted) return;
+    await _openLink('https://space.bilibili.com/$mid');
+  }
+
+  Future<void> _runBatch(
+    BuildContext context,
+    Future<BatchResult?> Function(ParseController controller) loader, {
+    bool loginRequired = false,
+  }) async {
+    final login = context.read<LoginController>();
+    if (loginRequired && !login.isLogin) {
+      tdToast(context, '请先登录');
+      return;
+    }
+    final controller = context.read<ParseController>();
+    try {
+      tdLoadingShow(context, text: '加载中');
+      final batch = await loader(controller);
+      controller.setBatchDirectly(batch);
+      tdLoadingHide();
+      if (!mounted) return;
+      if (batch == null || batch.items.isEmpty) {
+        tdToast(context, '没有可取的内容');
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const MediaListPage()),
+      );
+    } catch (error) {
+      tdLoadingHide();
+      if (!mounted) return;
+      tdToastError(context, '加载失败：${_describeError(error)}');
+    }
+  }
+
+  /// 把接口错误翻译成用户能看懂的原因
+  String _describeError(Object error) {
+    if (error is ApiException) {
+      if (error.needLogin) {
+        return '${error.message}（请重新登录刷新 Cookie）';
+      }
+      return error.message;
+    }
+    return '$error';
+  }
+}

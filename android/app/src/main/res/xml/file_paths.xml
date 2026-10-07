@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 应用外部私有目录（默认下载目录） -->
+    <external-files-path name="downkyi_external" path="." />
+    <!-- 应用内部目录 -->
+    <files-path name="downkyi_internal" path="." />
+    <!-- 缓存目录（弹幕/字幕临时文件） -->
+    <cache-path name="downkyi_cache" path="." />
+</paths>

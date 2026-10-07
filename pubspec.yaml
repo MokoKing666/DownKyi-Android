@@ -1,0 +1,40 @@
+name: downkyi
+description: 哔哩哔哩下载姬 Android 版 · DownKyi for Android（B 站视频下载工具）
+publish_to: 'none'
+version: 1.2.1+4
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # TDesign 官方 Flutter 组件库
+  tdesign_flutter: ^0.2.7
+
+  # 状态管理
+  provider: ^6.1.0
+
+  # 任务持久化
+  sqflite: ^2.3.0
+  path_provider: ^2.1.0
+  shared_preferences: ^2.2.0
+
+  # WBI 签名需要的 md5
+  crypto: ^3.0.0
+
+  # 登录二维码
+  qr_flutter: ^4.1.0
+
+  # FFmpeg（格式转换 / 转码 / 提取音频 / 生成 GIF）
+  # ffmpeg-kit 上游已停止维护，这里用社区维护分支（API 与上游一致）
+  ffmpeg_kit_flutter_new: ^4.6.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

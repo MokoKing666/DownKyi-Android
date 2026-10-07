@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TDesign 品牌色 -->
+    <color name="td_brand">#0052D9</color>
+    <!-- 启动图标底板色：取自原项目 DownKyi logo 底板精确主色 -->
+    <color name="ic_launcher_background">#FF79CBDE</color>
+    <color name="launch_background">#FFFFFF</color>
+</resources>

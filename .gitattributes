@@ -1,0 +1,26 @@
+# 统一换行符，避免 Windows 上检出后整个仓库显示为已修改
+* text=auto eol=lf
+
+# Windows 专用脚本保留 CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制文件不做换行转换，也不参与 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.apk binary
+*.jar binary
+*.ttf binary
+*.otf binary
+
+# Gradle wrapper 的 jar 是二进制，但必须提交
+gradle/wrapper/gradle-wrapper.jar binary
+android/gradle/wrapper/gradle-wrapper.jar binary
+
+# 语言统计时不把生成物算进去
+pubspec.lock linguist-generated=true
+*.lock linguist-generated=true
