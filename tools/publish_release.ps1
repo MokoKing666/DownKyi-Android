@@ -15,7 +15,7 @@
     不传则依次尝试：环境变量 GITHUB_TOKEN -> 交互式安全输入。
 
 .PARAMETER Tag
-    版本号标签，默认 v1.4.0。APK 文件名会按 DownKyi-<Tag>-arm64-v8a.apk 推导。
+    版本号标签，默认 v1.5.0。APK 文件名会按 DownKyi-<Tag>-arm64-v8a.apk 推导。
 
 .PARAMETER Draft
     加此参数则发布为草稿，不公开。
@@ -29,7 +29,7 @@
 #>
 param(
     [string] $Token,
-    [string] $Tag = 'v1.4.0',
+    [string] $Tag = 'v1.5.0',
     [string] $Repo = 'MokoKing666/DownKyi-Android',
     [string] $Branch = 'main',
     [string] $ApkPath,
@@ -82,7 +82,25 @@ SHA256：`{SHA256}`
 
 ## ✨ 本次更新（{TAG}）
 
-### 新增：订阅
+### 新增：站内搜索
+
+- 解析页右上角新增搜索按钮，输入关键词即可在 App 内搜视频，**不用再切到 B 站复制链接**。
+- 结果有两种用法：**点整行**直接解析该视频并进入解析结果页（单下载）；
+  **勾选后点「下载选中」**走批量链路（含真实清晰度的选项弹窗）。
+- 粘贴内容不是链接时（比如只有标题），点「开始解析」会弹窗询问是否用这段文字去搜索。
+- 走 `/x/web-interface/wbi/search/type`（新接口，旧接口已废弃）：
+  需要 WBI 签名 + `buvid3` Cookie + `.bilibili.com` 下的 Referer；
+  **没有 `page_size` 参数**，每页固定 20 条；`-412` 是 Cookies 校验不足的风控返回。
+
+### 修复：状态栏图标
+
+- 状态栏 / 通知栏的小图标过去是**手画的通用下载箭头**，与 App logo 不一致。
+  现在直接从 `docs/logo.png` 抽取白色标记生成单色剪影（mdpi ~ xxxhdpi 五套密度），
+  内容落在 24dp 画布内的 22dp 安全区。
+
+### v1.4.0 起已具备：订阅
+
+- 订阅持久化（UP 主投稿 / 合集 / 收藏夹 / 番剧整季），增量检查 + 主动通知 + 周期调度。
 
 - **订阅持久化**：新增独立的订阅库（与下载任务库分开，版本号互不牵制）。
   支持四类：UP 主投稿 / UP 主合集 / 收藏夹 / 番剧整季。

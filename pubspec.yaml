@@ -1,7 +1,7 @@
 name: downkyi
 description: 哔哩哔哩下载姬 Android 版 · DownKyi for Android（B 站视频下载工具）
 publish_to: 'none'
-version: 1.4.0+7
+version: 1.5.0+8
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

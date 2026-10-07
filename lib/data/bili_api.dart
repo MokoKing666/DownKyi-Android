@@ -469,6 +469,82 @@ class BiliApi {
     );
   }
 
+  // ------------------------------------------------------------------
+  // 站内搜索
+  // ------------------------------------------------------------------
+
+  /// 视频搜索。
+  ///
+  /// 必须用带 `wbi` 前缀的新接口 `/x/web-interface/wbi/search/type`——
+  /// 不带前缀的旧接口已废弃。搜索自 2022-08 起加了大量 Cookie 校验，
+  /// 字段不足会被拦截（`-412`），所以调用前需要已执行过 [ensureBuvid]。
+  ///
+  /// 另外接口**没有 `page_size` 参数**，每页固定 20 条，只能靠 `page` 翻页；
+  /// `data.numPages` 最多 50，`numResults` 最多 1000。
+  Future<BatchResult> searchVideo({
+    required String keyword,
+    int page = 1,
+    String order = 'totalrank',
+  }) async {
+    final data = asMap(await http.getData(
+      '/x/web-interface/wbi/search/type',
+      // 搜索要求 Referer 落在 .bilibili.com 下，这里带上真实的搜索页地址
+      referer: '${BiliConst.webBase}/search?keyword=${Uri.encodeComponent(keyword)}',
+      query: await _sign({
+        'search_type': 'video',
+        'keyword': keyword,
+        'page': '$page',
+        'order': order,
+      }),
+    ));
+
+    final items = <MediaItem>[];
+    for (final raw in asList(data['result'])) {
+      final map = asMap(raw);
+      if (asString(map['type']) != 'video') continue;
+      final bvid = asString(map['bvid']);
+      if (bvid.isEmpty) continue;
+      items.add(MediaItem(
+        bvid: bvid,
+        // 搜索结果不返回 cid，下载前由 DownloadManager._ensureCid 补查
+        cid: 0,
+        aid: asInt(map['aid'] ?? map['id']),
+        title: plainTitle(asString(map['title'], '未命名')),
+        cover: normalizeUrl(asString(map['pic'])),
+        durationMs: durationFromText(asString(map['duration'])),
+        ownerName: asString(map['author']),
+      ));
+    }
+
+    return BatchResult(
+      title: keyword,
+      items: items,
+      hasMore: page < asInt(data['numPages'], 1),
+      page: page,
+    );
+  }
+
+  /// 搜索结果的标题里带 `<em class="keyword">` 高亮标签，需要剥掉并还原 HTML 实体
+  static String plainTitle(String raw) {
+    return raw
+        .replaceAll(RegExp(r'</?em[^>]*>'), '')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&amp;', '&');
+  }
+
+  /// 搜索结果的时长是 `"4:18"` / `"1:02:33"` 这样的字符串，转成毫秒
+  static int durationFromText(String text) {
+    if (text.isEmpty) return 0;
+    var seconds = 0;
+    for (final part in text.split(':')) {
+      seconds = seconds * 60 + (int.tryParse(part.trim()) ?? 0);
+    }
+    return seconds * 1000;
+  }
+
   /// 观看历史
   ///
   /// **字段层级是这个接口最大的坑**：新版 `history/cursor` 把

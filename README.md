@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.4.0（versionCode 7） |
+| 版本 | v1.5.0（versionCode 8） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,33 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.5.0
+
+**新增：站内搜索**
+
+- 解析页右上角新增搜索按钮，输入关键词即可在 App 内搜视频，**不用再切到 B 站复制链接**。
+- 结果有两种用法：**点整行**直接解析该视频并进入解析结果页（单下载）；
+  **勾选后点「下载选中」**走批量链路（含真实清晰度的选项弹窗）。
+- 结果复用 `MediaItem` / `BatchResult`，所以「批量下载 + 清晰度弹窗 + cid 补查」
+  全是现成链路，没有另写一套下载逻辑。
+- 粘贴内容不是链接时（比如只有标题），点「开始解析」会弹窗询问是否用这段文字去搜索。
+
+**接口要点**
+
+- 用 `/x/web-interface/wbi/search/type`（带 `wbi` 前缀的新接口，旧接口已废弃），
+  需要 WBI 签名 + `buvid3` Cookie + `.bilibili.com` 下的 Referer。
+- 该接口**没有 `page_size` 参数**，每页固定 20 条，翻页只能靠 `page`。
+- `-412` 是搜索特有的风控返回（Cookies 校验不足），提示里会引导先登录。
+- 标题里的 `<em class="keyword">` 高亮标签会剥掉，`"4:18"` 形式的时长会转成毫秒。
+
+**修复：状态栏图标**
+
+- 状态栏 / 通知栏的小图标过去是**手画的通用下载箭头**，与 App logo 不一致。
+  现在直接从 `docs/logo.png` 抽取白色标记生成单色剪影（mdpi ~ xxxhdpi 五套密度），
+  内容落在 24dp 画布内的 22dp 安全区。
+- 抽取用连通域过滤：logo 里有两个 1 像素的杂点会把包围盒从 277px 撑到 345px，
+  按面积阈值过滤后标记才是居中且最大化的（否则会整体偏移并缩小）。
 
 ### v1.4.0
 
@@ -268,7 +295,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.4.0-arm64-v8a.apk
+adb install -r DownKyi-v1.5.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

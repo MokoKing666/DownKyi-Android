@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
+import '../../core/link_parser.dart';
 import '../../data/bili_api.dart';
 import '../../data/http_client.dart';
 import '../../data/models.dart';
@@ -17,6 +18,7 @@ import '../../subscription/notification_service.dart';
 import '../td.dart';
 import 'login_page.dart';
 import 'media_list_page.dart';
+import 'search_page.dart';
 import 'subscription_page.dart';
 import 'video_detail_page.dart';
 
@@ -61,6 +63,12 @@ class _ParsePageState extends State<ParsePage> {
     final success = await controller.parse(input);
     if (!mounted) return;
     if (!success) {
+      // 输入既不是链接也不是 BV 号时，引导到站内搜索——
+      // 用户手里往往只有「视频标题」，不该逼他切到 B 站去复制链接
+      if (parseLink(input).kind == LinkKind.unknown) {
+        await _offerSearch(input);
+        return;
+      }
       tdToastError(context, controller.error ?? '解析失败');
       return;
     }
@@ -119,6 +127,11 @@ class _ParsePageState extends State<ParsePage> {
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    tooltip: '站内搜索',
+                    onPressed: () => unawaited(_openSearch(context)),
+                    icon: Icon(Icons.search, color: TdPalette.textPrimary),
                   ),
                   TdLabel(login.isLogin ? '已登录' : '未登录',
                       color: login.isLogin ? TdPalette.success : TdPalette.warning,
@@ -381,6 +394,38 @@ class _ParsePageState extends State<ParsePage> {
   Future<void> _openSubscriptions(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const SubscriptionPage()),
+    );
+  }
+
+  Future<void> _openSearch(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SearchPage()),
+    );
+  }
+
+  /// 输入既不是链接也不是 BV 号时，问一下要不要把它当关键词去站内搜索
+  Future<void> _offerSearch(String keyword) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: TdPalette.container,
+        title: Text('这不是链接', style: TdText.titleSmall),
+        content: Text('要在站内搜索「$keyword」吗？'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('搜索'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => SearchPage(initialKeyword: keyword)),
     );
   }
 
