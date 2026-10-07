@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
@@ -7,6 +9,7 @@ import '../../core/logger.dart';
 import '../../data/http_client.dart';
 import '../../data/settings_store.dart';
 import '../../download/download_manager.dart';
+import '../../subscription/subscription_scheduler.dart';
 import '../td.dart';
 import '../theme.dart';
 import '../widgets/choice.dart';
@@ -331,6 +334,44 @@ class SettingsPage extends StatelessWidget {
                   '提取 MP3 / M4A 音频、生成 GIF、压缩体积或在 H.264 与 H.265 之间互转。',
                   style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 订阅检查 ----------------
+          TdSection(
+            title: '订阅检查',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TdSwitchRow(
+                  title: '周期后台检查',
+                  description: '系统调度不保证准时，打开 App 时还会补检查一次',
+                  value: settings.subscriptionCheckEnabled,
+                  onChanged: (value) {
+                    settings.update(() => settings.subscriptionCheckEnabled = value);
+                    unawaited(SubscriptionScheduler.instance.apply(
+                      enabled: value,
+                      intervalHours: settings.subscriptionIntervalHours,
+                    ));
+                  },
+                ),
+                if (settings.subscriptionCheckEnabled) ...<Widget>[
+                  const SizedBox(height: TdSpacer.small),
+                  TdChoiceGroup<int>(
+                    items: SettingsStore.subscriptionIntervalOptions,
+                    selected: settings.subscriptionIntervalHours,
+                    labelBuilder: (value) => '$value 小时',
+                    onSelect: (value) {
+                      settings.update(() => settings.subscriptionIntervalHours = value);
+                      unawaited(SubscriptionScheduler.instance.apply(
+                        enabled: settings.subscriptionCheckEnabled,
+                        intervalHours: value,
+                      ));
+                    },
+                  ),
+                ],
               ],
             ),
           ),

@@ -31,6 +31,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // 必须回写，否则后续 getIntent() 拿到的还是旧的启动 Intent
+        setIntent(intent)
         sharedText = extractSharedText(intent)
     }
 

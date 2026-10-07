@@ -590,19 +590,24 @@ class BiliApi {
     return result;
   }
 
+  /// UP 主合集内容列表。
+  ///
+  /// [newestFirst] 对应接口的 `sort_reverse`：默认 false（按发布时间**升序**，第 1 页最旧）。
+  /// 订阅检查必须传 true，否则最新内容在最后一页，只拉第 1 页永远检测不到更新。
   Future<BatchResult> seasonArchives({
     required int mid,
     required int seasonId,
     String name = '',
     int page = 1,
     int pageSize = 30,
+    bool newestFirst = false,
   }) async {
     final data = asMap(await http.getData(
       '/x/polymer/web-space/seasons_archives_list',
       query: await _sign({
         'mid': '$mid',
         'season_id': '$seasonId',
-        'sort_reverse': 'false',
+        'sort_reverse': newestFirst ? 'true' : 'false',
         'page_num': '$page',
         'page_size': '$pageSize',
         'web_location': '333.1387',

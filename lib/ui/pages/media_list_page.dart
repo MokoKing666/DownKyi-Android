@@ -8,9 +8,13 @@ import '../td.dart';
 import '../widgets/download_options_sheet.dart';
 import '../widgets/video_card.dart';
 
-/// 批量列表页：收藏夹 / 合集 / 历史 / 稍后再看 / 整季番剧。
+/// 批量列表页：收藏夹 / 合集 / 历史 / 稍后再看 / 整季番剧 / 订阅新内容。
 class MediaListPage extends StatelessWidget {
-  const MediaListPage({super.key});
+  const MediaListPage({super.key, this.onEnqueued});
+
+  /// 任务创建成功后的回调，订阅页用它把对应条目标记为「已处理」。
+  /// 只有真正建了任务才触发——用户在设置弹窗里点取消不会触发。
+  final Future<void> Function(List<MediaItem> items)? onEnqueued;
 
   @override
   Widget build(BuildContext context) {

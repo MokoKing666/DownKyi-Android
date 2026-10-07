@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,11 +9,15 @@ import '../../core/constants.dart';
 import '../../data/bili_api.dart';
 import '../../data/http_client.dart';
 import '../../data/models.dart';
+import '../../data/subscription.dart';
+import '../../data/subscription_dao.dart';
 import '../../state/login_controller.dart';
 import '../../state/parse_controller.dart';
+import '../../subscription/notification_service.dart';
 import '../td.dart';
 import 'login_page.dart';
 import 'media_list_page.dart';
+import 'subscription_page.dart';
 import 'video_detail_page.dart';
 
 /// 首页：粘贴链接解析 + 常用入口。
@@ -26,7 +32,20 @@ class _ParsePageState extends State<ParsePage> {
   final TextEditingController _controller = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // 点击订阅通知时（App 已在前台）直接跳到该订阅的新内容页
+    NotificationService.instance.onOpenSubscription = _openSubscriptionById;
+    // 冷启动：App 是因为点击通知才被拉起的
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final id = NotificationService.instance.consumePendingSubscriptionId();
+      if (id != 0) unawaited(_openSubscriptionById(id));
+    });
+  }
+
+  @override
   void dispose() {
+    NotificationService.instance.onOpenSubscription = null;
     _controller.dispose();
     super.dispose();
   }
@@ -168,33 +187,46 @@ class _ParsePageState extends State<ParsePage> {
                   const spacing = TdSpacer.small;
                   const columns = 2;
                   final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
-                  return Wrap(
-                    spacing: spacing,
-                    runSpacing: spacing,
+                  return Column(
                     children: <Widget>[
-                      _shortcut(
-                        width: itemWidth,
-                        icon: Icons.star_outline,
-                        title: '我的收藏夹',
-                        onTap: () => _openFavorites(context),
+                      Wrap(
+                        spacing: spacing,
+                        runSpacing: spacing,
+                        children: <Widget>[
+                          _shortcut(
+                            width: itemWidth,
+                            icon: Icons.star_outline,
+                            title: '我的收藏夹',
+                            onTap: () => _openFavorites(context),
+                          ),
+                          _shortcut(
+                            width: itemWidth,
+                            icon: Icons.history,
+                            title: '观看历史',
+                            onTap: () => _openHistory(context),
+                          ),
+                          _shortcut(
+                            width: itemWidth,
+                            icon: Icons.watch_later_outlined,
+                            title: '稍后再看',
+                            onTap: () => _openToView(context),
+                          ),
+                          _shortcut(
+                            width: itemWidth,
+                            icon: Icons.playlist_play,
+                            title: 'UP 主合集',
+                            onTap: () => _promptMid(context),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: spacing),
+                      // 订阅是「常驻跟踪 + 主动通知」，和上面四个一次性入口不是一类，
+                      // 所以单独占满整行：既在视觉上区分开，也避免 5 个卡片排成 2+2+1 的参差
                       _shortcut(
-                        width: itemWidth,
-                        icon: Icons.history,
-                        title: '观看历史',
-                        onTap: () => _openHistory(context),
-                      ),
-                      _shortcut(
-                        width: itemWidth,
-                        icon: Icons.watch_later_outlined,
-                        title: '稍后再看',
-                        onTap: () => _openToView(context),
-                      ),
-                      _shortcut(
-                        width: itemWidth,
-                        icon: Icons.playlist_play,
-                        title: 'UP 主合集',
-                        onTap: () => _promptMid(context),
+                        width: constraints.maxWidth,
+                        icon: Icons.notifications_active_outlined,
+                        title: '订阅更新（追 UP 主 / 合集 / 番剧）',
+                        onTap: () => _openSubscriptions(context),
                       ),
                     ],
                   );
@@ -344,6 +376,33 @@ class _ParsePageState extends State<ParsePage> {
       if (items.isEmpty) return null;
       return BatchResult(title: '稍后再看', items: items);
     }, loginRequired: true);
+  }
+
+  Future<void> _openSubscriptions(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SubscriptionPage()),
+    );
+  }
+
+  /// 从通知跳到某个订阅的新内容页；订阅已被删除时退回到订阅列表
+  Future<void> _openSubscriptionById(int id) async {
+    if (!mounted) return;
+    Subscription? found;
+    for (final item in await SubscriptionDao.instance.loadAll()) {
+      if (item.id == id) {
+        found = item;
+        break;
+      }
+    }
+    if (!mounted) return;
+    final target = found;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => target == null
+            ? const SubscriptionPage()
+            : SubscriptionItemsPage(subscription: target),
+      ),
+    );
   }
 
   Future<void> _promptMid(BuildContext context) async {

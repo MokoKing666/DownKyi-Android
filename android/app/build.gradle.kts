@@ -12,6 +12,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications 要求开启 core library desugaring
+        // （它在 Java 8+ API 上用了 java.time 等新库，低版本设备需要脱糖补齐）
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -64,6 +67,9 @@ kotlin {
 dependencies {
     // FileProvider（打开/分享已下载文件）
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // 配合 isCoreLibraryDesugaringEnabled（flutter_local_notifications 的要求）
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {

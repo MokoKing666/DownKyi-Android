@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.3.1（versionCode 6） |
+| 版本 | v1.4.0（versionCode 7） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,52 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.4.0
+
+**新增：订阅（把「一次性快照」升级为「持久跟踪」）**
+
+- **订阅持久化**：新增独立的订阅库（`downkyi_subscription.db`，与下载任务库分开，
+  避免两者的版本号互相牵制）。支持四类：**UP 主投稿 / UP 主合集 / 收藏夹 / 番剧整季**。
+  添加入口在解析页「常用入口」最下方，复用现有 `parseLink` 的链接识别，没有另写一套。
+- **增量检查**：每次只拉第 1 页，与已发现集合做差，不做全量翻页。
+  合集比较特殊——接口默认按发布时间**升序**（第 1 页是最旧的），
+  因此给 `seasonArchives` 加了 `newestFirst` 参数，检查时倒序拉才能看到最新内容。
+- **主动通知**：发现新内容后发通知，点击直达该订阅的新内容页。
+- **周期调度**：WorkManager 周期任务，默认 6 小时，可在设置里调整或关闭。
+- **发现即判重**：已发现内容记在 `subscription_seen`，键是 **`bvid + epId`**。
+  番剧条目没有 `bvid`（见 `BiliApi.history()` 里 pgc 分支只能写 `bvid: ''`），
+  只存 bvid 会让所有番剧记录互相覆盖。
+- **自动下载默认关闭**：`auto_download` 默认 0，即「只通知不下载」。
+  8K 视频单个动辄数 GB，默认自动下载会迅速吃满存储；开启后走现有 `DownloadManager`，
+  依旧受并发数与重试策略约束。
+- **首次检查只播种**：第一次检查把当前内容全部记为「已知」但不通知、不下载，
+  否则新加订阅会立刻被推送一屏存量内容。
+
+**设计取舍**
+
+- 后台检查跑在 WorkManager 的后台 isolate 里，那是一个**全新的 Dart 环境**：
+  `main()` 里建好的对象图都不存在，必须自己重新装配一遍
+  （`SettingsStore.load()` 会从 SharedPreferences 恢复 Cookie，登录态可用）。
+- 通知改用 `flutter_local_notifications`，而不是复用 App 自建的 MethodChannel：
+  后台 isolate 的 `FlutterEngine` 由 workmanager 自己创建，
+  **里面没有 MainActivity**——而自建通道正是在 `MainActivity.configureFlutterEngine`
+  里注册的，从后台调用会抛 `MissingPluginException`，通知会静默丢失；
+  workmanager 也没提供 engine 创建回调来补注册。该插件是随包发布的插件，
+  后台 engine 会自动注册它，于是前台与后台能共用一套代码。
+- 通知渠道用独立的 `downkyi_subscription`（IMPORTANCE_DEFAULT），
+  不复用下载进度那条：那条是 `IMPORTANCE_LOW` 的前台服务渠道，
+  **渠道重要性创建后 App 无法修改**，放进去等于没有声音、没有横幅，
+  还会和常驻的下载进度条混在一起被误读。
+- 因为 `flutter_local_notifications` 的要求，`android/app/build.gradle.kts`
+  开启了 **core library desugaring**（`desugar_jdk_libs`）。
+
+**已知限制**
+
+- 周期任务由系统调度，**不保证准时**（可能被推迟甚至跳过），
+  因此每次打开 App 还会补做一次检查。
+- 追番订阅用 `seasonInfo` 取整季剧集列表比对，暂不支持课程（`cheese`）。
+- 单集链接（`ep`）不构成订阅，需要改用整季（`ss`）链接。
 
 ### v1.3.1
 
@@ -222,7 +268,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.3.1-arm64-v8a.apk
+adb install -r DownKyi-v1.4.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

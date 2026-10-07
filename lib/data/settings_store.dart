@@ -31,6 +31,8 @@ class SettingsStore extends ChangeNotifier {
   static const String _kAria2Split = 'aria2_split';
   static const String _kAria2Dir = 'aria2_dir';
   static const String _kGifFps = 'convert_gif_fps';
+  static const String _kSubCheck = 'subscription_check_enabled';
+  static const String _kSubInterval = 'subscription_interval_hours';
 
   static const String defaultAria2Url = 'http://127.0.0.1:6800/jsonrpc';
 
@@ -74,6 +76,15 @@ class SettingsStore extends ChangeNotifier {
 
   /// GIF 生成帧率
   int gifFps = 12;
+
+  /// 是否开启订阅的周期后台检查
+  bool subscriptionCheckEnabled = true;
+
+  /// 订阅检查间隔（小时）。WorkManager 的周期下限是 15 分钟，这里最短 1 小时
+  int subscriptionIntervalHours = 6;
+
+  /// 可选的检查间隔
+  static const List<int> subscriptionIntervalOptions = <int>[1, 3, 6, 12, 24];
 
   bool _loaded = false;
 
@@ -120,6 +131,8 @@ class SettingsStore extends ChangeNotifier {
     aria2Split = prefs.getInt(_kAria2Split) ?? 16;
     aria2Dir = prefs.getString(_kAria2Dir) ?? '';
     gifFps = prefs.getInt(_kGifFps) ?? 12;
+    subscriptionCheckEnabled = prefs.getBool(_kSubCheck) ?? true;
+    subscriptionIntervalHours = prefs.getInt(_kSubInterval) ?? 6;
 
     final savedFormat = prefs.getString(_kDanmaku) ?? DanmakuFormat.ass.name;
     danmakuFormat = DanmakuFormat.values.firstWhere(
@@ -161,6 +174,8 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setInt(_kAria2Split, aria2Split);
     await prefs.setString(_kAria2Dir, aria2Dir);
     await prefs.setInt(_kGifFps, gifFps);
+    await prefs.setBool(_kSubCheck, subscriptionCheckEnabled);
+    await prefs.setInt(_kSubInterval, subscriptionIntervalHours);
     await prefs.setString(_kCookie, AppHttp.instance.cookieHeader);
   }
 
