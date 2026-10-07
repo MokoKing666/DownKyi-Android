@@ -5,6 +5,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../../data/models.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
+import '../widgets/download_options_sheet.dart';
 import '../widgets/video_card.dart';
 
 /// 批量列表页：收藏夹 / 合集 / 历史 / 稍后再看 / 整季番剧。
@@ -104,14 +105,21 @@ class MediaListPage extends StatelessWidget {
   }
 
   Future<void> _download(BuildContext context, ParseController parse) async {
+    // 批量入口没有「解析结果页」，这里先弹选项面板，让用户挑清晰度 / 编码 / 下载内容
+    final confirmed = await showDownloadOptionsSheet(context, count: parse.selectedCount);
+    if (!confirmed || !context.mounted) return;
     if (!parse.wantVideo && !parse.wantAudio) {
-      tdToast(context, '请先到「解析结果」里选择下载内容（视频 / 音频）');
+      tdToast(context, '请至少选择「视频」或「音频」');
       return;
     }
     tdLoadingShow(context, text: '创建任务');
     final count = await parse.enqueueBatch();
     tdLoadingHide();
     if (!context.mounted) return;
+    if (count == 0) {
+      tdToast(context, '任务已存在或无可下载内容');
+      return;
+    }
     tdToastSuccess(context, '已创建 $count 个下载任务');
     Navigator.of(context).maybePop();
   }

@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.2.1（versionCode 4） |
+| 版本 | v1.3.0（versionCode 5） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -114,6 +114,34 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 
 ## 🧾 更新日志
 
+### v1.3.0
+
+**修复**
+
+- **观看历史一直抓不到内容**：新版 `history/cursor` 接口把 `bvid` / `cid` / `oid`
+  全部放在 `list[i].history` 子对象里，顶层只有 `kid`，而且**根本没有 `aid` 字段**
+  （番剧时 `kid` 是 ssid，不能当 avid 用）。过去读的是顶层 `bvid`，它恒为空字符串，
+  于是每条记录都在 `if (bvid.isEmpty) continue;` 处被跳过，最终返回空列表
+  （表现为「没有可取的内容」）。现在改从 `history` 子对象取字段，并按业务类型分流：
+  `archive` 稿件用 `bvid` + `cid`，`pgc` 番剧用 `epid` 走番剧播放地址，
+  `live` / `article` / `article-list` 不是可下载的视频，直接过滤掉。
+
+**新增**
+
+- **批量下载前可选择清晰度 / 编码 / 下载内容**：收藏夹、合集、观看历史、稍后再看、
+  整季番剧的「下载选中」现在会先弹出设置面板再创建任务。
+  批量入口没有单个视频的 `playurl` 信息，面板给出的是通用清晰度列表，
+  选到某个视频不支持的档位不会失败——服务端会回退到该视频实际可用的最高档
+  （`DashInfo.pickVideo` 的兜底逻辑）。过去这些入口只能沿用「设置」里的默认值，
+  无法针对某次批量下载单独调整。
+
+**改进**
+
+- **常用入口排版**：原来用固定 `width: 150` 的卡片，宽屏下每行只占 312px、
+  右侧留出一条参差的空隙，窄屏又容易把文字挤成省略号。
+  现在用 `LayoutBuilder` 按容器实际宽度等分两列（卡片宽度动态计算），
+  并把卡片高度统一为 56，任何屏幕宽度都能铺满整行。
+
 ### v1.2.1
 
 **修复**
@@ -173,7 +201,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.2.1-arm64-v8a.apk
+adb install -r DownKyi-v1.3.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

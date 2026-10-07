@@ -161,31 +161,44 @@ class _ParsePageState extends State<ParsePage> {
             const SizedBox(height: TdSpacer.small),
             TdSection(
               title: '常用入口',
-              child: Wrap(
-                spacing: TdSpacer.small,
-                runSpacing: TdSpacer.small,
-                children: <Widget>[
-                  _shortcut(
-                    icon: Icons.star_outline,
-                    title: '我的收藏夹',
-                    onTap: () => _openFavorites(context),
-                  ),
-                  _shortcut(
-                    icon: Icons.history,
-                    title: '观看历史',
-                    onTap: () => _openHistory(context),
-                  ),
-                  _shortcut(
-                    icon: Icons.watch_later_outlined,
-                    title: '稍后再看',
-                    onTap: () => _openToView(context),
-                  ),
-                  _shortcut(
-                    icon: Icons.playlist_play,
-                    title: 'UP 主合集',
-                    onTap: () => _promptMid(context),
-                  ),
-                ],
+              // 按实际可用宽度等分两列：固定宽度在宽屏下每行只占 312px，
+              // 右侧会留出一条参差的空隙，窄屏又容易挤掉文字。
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const spacing = TdSpacer.small;
+                  const columns = 2;
+                  final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: <Widget>[
+                      _shortcut(
+                        width: itemWidth,
+                        icon: Icons.star_outline,
+                        title: '我的收藏夹',
+                        onTap: () => _openFavorites(context),
+                      ),
+                      _shortcut(
+                        width: itemWidth,
+                        icon: Icons.history,
+                        title: '观看历史',
+                        onTap: () => _openHistory(context),
+                      ),
+                      _shortcut(
+                        width: itemWidth,
+                        icon: Icons.watch_later_outlined,
+                        title: '稍后再看',
+                        onTap: () => _openToView(context),
+                      ),
+                      _shortcut(
+                        width: itemWidth,
+                        icon: Icons.playlist_play,
+                        title: 'UP 主合集',
+                        onTap: () => _promptMid(context),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: TdSpacer.small),
@@ -228,6 +241,7 @@ class _ParsePageState extends State<ParsePage> {
   }
 
   Widget _shortcut({
+    required double width,
     required IconData icon,
     required String title,
     required VoidCallback onTap,
@@ -236,8 +250,9 @@ class _ParsePageState extends State<ParsePage> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(TdRadius.large),
       child: Container(
-        width: 150,
-        padding: const EdgeInsets.all(TdSpacer.small),
+        width: width,
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
         decoration: BoxDecoration(
           color: TdPalette.gray1,
           borderRadius: BorderRadius.circular(TdRadius.large),

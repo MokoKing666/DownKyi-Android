@@ -471,8 +471,18 @@ class BiliApi {
 
   /// 观看历史
   ///
-  /// 游标参数（max / view_at / business）留空表示「从当前时间开始取」；
-  /// 之前显式传 `business=`（空串）容易被服务端判定为参数不合法（-400）。
+  /// **字段层级是这个接口最大的坑**：新版 `history/cursor` 把
+  /// `bvid` / `cid` / `oid` 全部放在 `list[i].history` 子对象里，
+  /// 顶层只有 `kid`，且**根本没有 `aid` 字段**（`kid` 在番剧时是 ssid，不能当 avid 用）。
+  /// 顶层 `bvid` 恒为空字符串，所以早期实现会把每一条都 `continue` 掉、
+  /// 最终返回空列表（表现为「历史获取不到 / 没有可取的内容」）。
+  ///
+  /// 各业务类型（`history.business`）的可下载性：
+  /// - `archive` 稿件：有 `bvid` + `cid`，可直接下载
+  /// - `pgc` 番剧影视：没有 `bvid`，靠 `epid` 走番剧播放地址
+  /// - `live` 直播 / `article` 专栏 / `article-list` 文集：不是可下载的视频，跳过
+  ///
+  /// 游标参数（max / view_at / business）不传表示「从当前时间开始取」。
   Future<List<MediaItem>> history({int pageSize = 30}) async {
     final data = asMap(await http.getData(
       '/x/web-interface/history/cursor',
@@ -481,17 +491,45 @@ class BiliApi {
     final items = <MediaItem>[];
     for (final item in asList(data['list'])) {
       final map = asMap(item);
-      final bvid = asString(map['bvid']);
-      if (bvid.isEmpty) continue;
-      items.add(MediaItem(
-        bvid: bvid,
-        cid: MediaItem.resolveCid(map),
-        aid: asInt(asMap(map['history'])['oid']),
-        title: asString(map['title'], '未命名'),
-        cover: normalizeUrl(asString(map['cover'])),
-        durationMs: asInt(map['duration']) * 1000,
-        ownerName: asString(map['author_name']),
-      ));
+      final nested = asMap(map['history']);
+      final business = asString(nested['business']);
+      if (business != 'archive' && business != 'pgc') continue;
+
+      final cid = asInt(nested['cid']);
+      final oid = asInt(nested['oid']);
+      final epId = asInt(nested['epid']);
+      final bvid = asString(nested['bvid']);
+      final title = asString(map['title'], '未命名');
+      final cover = normalizeUrl(asString(map['cover']));
+      final durationMs = asInt(map['duration']) * 1000;
+      final ownerName = asString(map['author_name']);
+
+      if (business == 'archive') {
+        if (bvid.isEmpty || cid <= 0) continue;
+        items.add(MediaItem(
+          bvid: bvid,
+          cid: cid,
+          aid: oid,
+          title: title,
+          cover: cover,
+          durationMs: durationMs,
+          ownerName: ownerName,
+        ));
+      } else {
+        // 番剧：没有 bvid，必须靠 epid 才能取到播放地址
+        if (epId <= 0) continue;
+        items.add(MediaItem(
+          bvid: '',
+          cid: cid,
+          aid: oid,
+          title: title,
+          cover: cover,
+          durationMs: durationMs,
+          ownerName: ownerName,
+          btype: BiliConst.typeBangumi,
+          epId: epId,
+        ));
+      }
     }
     return items;
   }
