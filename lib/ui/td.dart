@@ -270,14 +270,71 @@ class TdCheckRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TDCheckbox(
-      title: title,
-      subTitle: description,
-      checked: value,
-      size: TDCheckBoxSize.small,
-      insetSpacing: 0,
-      showDivider: false,
-      onCheckBoxChanged: (checked) => onChanged(checked),
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _CheckMark(checked: value),
+            const SizedBox(width: TdSpacer.small),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(title, style: TdText.bodyMedium),
+                  if (description != null &&
+                      description!.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      description!,
+                      style: TdText.bodySmall
+                          .copyWith(color: TdPalette.textPlaceholder),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 自绘勾选框。
+///
+/// 这里刻意**不用 tdesign 的 `TDCheckbox`**：它的配色只有一部分跟着我们注入的
+/// `colorMap` 走，未选中态本该是透明的，在夜间模式下却会残留一块**白色方底**
+/// （用户实测反馈「不是透明度的、有方形白边」）。
+///
+/// 自绘只用 `TdPalette`——它由 `TdPalette.apply()` 按当前主题整体注入，
+/// 不存在「漏掉某个颜色」的可能，从根上避免这一类问题。
+class _CheckMark extends StatelessWidget {
+  const _CheckMark({required this.checked});
+
+  final bool checked;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      width: 20,
+      height: 20,
+      margin: const EdgeInsets.only(top: 1),
+      decoration: BoxDecoration(
+        // 未选中是纯描边（透明底），选中才是实心品牌色
+        color: checked ? TdPalette.brand : Colors.transparent,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: checked ? TdPalette.brand : TdPalette.textPlaceholder,
+          width: 1.5,
+        ),
+      ),
+      child: checked
+          ? const Icon(Icons.check, size: 14, color: Colors.white)
+          : null,
     );
   }
 }

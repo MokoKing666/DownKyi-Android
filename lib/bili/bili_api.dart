@@ -285,15 +285,22 @@ class BiliApi {
       }
     }
 
-    var duration = asInt(dash['duration']);
-    if (duration <= 0) duration = asInt(data['timelength']);
-    if (duration <= 0) {
+    // ⚠️ 三个来源的单位不一样，必须统一成毫秒再用：
+    //   dash.duration   → **秒**（例如 3 分 38 秒的视频这里是 218）
+    //   timelength      → 毫秒
+    //   durl.length     → 毫秒
+    // 这里曾经把 dash.duration 直接当毫秒塞进 DashInfo.durationMs，
+    // 少乘了 1000，导致所有基于时长的计算都小了 1000 倍——
+    // 最直观的表现是「清晰度选项上的预估体积把 MB 显示成了 KB」。
+    var durationMs = asInt(dash['duration']) * 1000;
+    if (durationMs <= 0) durationMs = asInt(data['timelength']);
+    if (durationMs <= 0) {
       final durl = asList(data['durl']);
-      if (durl.isNotEmpty) duration = asInt(asMap(durl.first)['length']);
+      if (durl.isNotEmpty) durationMs = asInt(asMap(durl.first)['length']);
     }
 
     return DashInfo(
-      durationMs: duration,
+      durationMs: durationMs,
       videos: videos,
       audios: audios,
       flac: flac,
