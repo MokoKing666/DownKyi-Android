@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.6（versionCode 20） |
+| 版本 | v2.0.7（versionCode 21） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -930,7 +930,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.6-arm64-v8a.apk
+adb install -r DownKyi-v2.0.7-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

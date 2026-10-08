@@ -861,6 +861,30 @@ class DownloadManager extends ChangeNotifier {
     return failed;
   }
 
+  /// 探测成品并记一行日志：分辨率 / 编码 / 时长 / 有无音视频轨。
+  ///
+  /// 目的是把「合并到底做出了什么」变成可观测量。之前几轮里，
+  /// 成品体积翻倍、播放器打不开，但轨道数、时长这些表面指标我一次都没看到过，
+  /// 只能靠推理——而推理连续错了三轮。
+  Future<void> _logOutputProbe(String output) async {
+    if (!BuildFlavor.supportsFfmpeg) return;
+    try {
+      final probe = await FfmpegService.probe(output);
+      if (probe == null) {
+        AppLog.d('Task', '成品探测：不可用');
+        return;
+      }
+      AppLog.d(
+        'Task',
+        '成品探测：${probe.resolutionLabel} 视频[${probe.videoCodec}] '
+            '音频[${probe.audioCodec}] 时长 ${probe.durationMs}ms '
+            '有视频=${probe.hasVideo} 有音频=${probe.hasAudio}',
+      );
+    } catch (error) {
+      AppLog.e('Task', '成品探测失败', error);
+    }
+  }
+
   Future<int> _fileSize(String? path) async {
     if (path == null || path.isEmpty) return 0;
     try {
@@ -949,6 +973,10 @@ class DownloadManager extends ChangeNotifier {
         '封装完成：视频 ${await _fileSize(videoPath)} + 音频 ${await _fileSize(audioPath)} '
             '-> 成品 ${await _fileSize(output)} 字节',
       );
+      // 再把成品重新读一遍。多轨、时长翻倍、编码被改这类问题，
+      // 体积和「能不能播」都可能看起来正常/异常得莫名其妙，
+      // 只有把成品探测一次才拿得到事实。前几轮排查全靠推理，就是缺这一行。
+      await _logOutputProbe(output);
       await _deleteFile(videoPath);
       await _deleteFile(audioPath);
 
