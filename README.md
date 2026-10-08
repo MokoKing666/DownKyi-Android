@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.4（versionCode 18） |
+| 版本 | v2.0.5（versionCode 19） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,36 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v2.0.5 —— 合并回到系统 MediaMuxer（采纳用户判断）
+
+**我把合并默认切回 Android 自带的 MediaMuxer，FFmpeg 只留在工具箱。**
+
+依据是你给的那条最硬的证据：**引入 FFmpeg 合并之前一直是正常的**。
+而我这三轮全是在「靠推理改封装」，结果一次比一次糟：
+
+| 版本 | 改动 | 结果 |
+|---|---|---|
+| v2.0.2 | 合并改用 FFmpeg | 不卡了，但杜比视界掉了、体积翻倍 |
+| v2.0.3 | 加 `-map 0:v` + `-strict unofficial` | 杜比标回来了，但**播不了** |
+| v2.0.5 | **合并回到 MediaMuxer** | —— |
+
+根子上是：封装是所有功能里**最不该"理论上更好"**的一环。
+MediaMuxer 与系统播放器对 MP4 的处理最一致，杜比视界这类带额外元数据的
+片源尤其依赖它；FFmpeg 的 `-c copy` 在纸面上更标准，实测却会产出
+系统播放器不认的成品。这个代价我付不起。
+
+**新增「合并方式」设置（默认：系统封装）**
+
+- **系统封装（推荐）**：MediaMuxer，默认值，兼容性最好
+- **FFmpeg 重封装**：唯一保留 FFmpeg 于合并链路的入口。只在你遇到
+  「合并后画面一顿一顿」时切换——那是 MediaMuxer 在部分机型上
+  对 B 帧回退 PTS 的处理差异，FFmpeg 能绕开
+- 切到 FFmpeg 后若仍失败，会**自动回退** MediaMuxer
+- 系统封装模式下**绝不**偷偷调用 FFmpeg：失败就如实报失败
+
+工具箱的「重新合并音视频」同样遵循这个设置。FFmpeg 继续承担它擅长的部分：
+格式转换、GIF、压缩、H.264↔H.265、无损截取等。
 
 ### v2.0.4 —— 体积预估改为「视频 + 音频」合计
 
@@ -851,7 +881,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.4-arm64-v8a.apk
+adb install -r DownKyi-v2.0.5-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

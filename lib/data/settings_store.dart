@@ -43,6 +43,7 @@ class SettingsStore extends ChangeNotifier {
   static const String _kSubtitleLangs = 'subtitle_languages';
   static const String _kDanmakuStyle = 'danmaku_style';
   static const String _kSmartAuto = 'smart_auto_select';
+  static const String _kMuxEngine = 'mux_engine';
 
   static const String defaultAria2Url = 'http://127.0.0.1:6800/jsonrpc';
 
@@ -109,6 +110,11 @@ class SettingsStore extends ChangeNotifier {
   /// 弹幕 ASS 样式（评审第 22 项）
   DanmakuStyle danmakuStyle = const DanmakuStyle();
 
+  /// 合并用哪套实现。默认系统 MediaMuxer——封装是核心链路，兼容性优先。
+  MuxEngine muxEngine = MuxEngine.system;
+
+  bool get useFfmpegForMux => muxEngine == MuxEngine.ffmpeg;
+
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -163,6 +169,7 @@ class SettingsStore extends ChangeNotifier {
     gifFps = prefs.getInt(_kGifFps) ?? 12;
     subscriptionCheckEnabled = prefs.getBool(_kSubCheck) ?? true;
     subscriptionIntervalHours = prefs.getInt(_kSubInterval) ?? 6;
+    muxEngine = MuxEngine.fromName(prefs.getString(_kMuxEngine));
     preferenceMode = PreferenceMode.fromName(prefs.getString(_kPreferenceMode));
     smartAutoSelect = prefs.getBool(_kSmartAuto) ?? true;
     subtitleLanguages =
@@ -215,6 +222,7 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setBool(_kSubCheck, subscriptionCheckEnabled);
     await prefs.setInt(_kSubInterval, subscriptionIntervalHours);
     await prefs.setString(_kPreferenceMode, preferenceMode.name);
+    await prefs.setString(_kMuxEngine, muxEngine.name);
     await prefs.setBool(_kSmartAuto, smartAutoSelect);
     await prefs.setString(_kSubtitleLangs, jsonEncode(subtitleLanguages));
     await prefs.setString(_kDanmakuStyle, jsonEncode(danmakuStyle.toJson()));

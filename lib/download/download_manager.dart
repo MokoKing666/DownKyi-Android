@@ -929,13 +929,15 @@ class DownloadManager extends ChangeNotifier {
       // 音频要无条件传进去：只有音频没有视频时也必须输出 m4a，
       // 不能因为「缺少视频轨」就把音频丢掉导致封装必然失败。
       //
-      // 顺序上优先 FFmpeg：B 站片源普遍带 B 帧，解码顺序里 PTS 天然回退，
-      // 而 MediaMuxer 对非单调时间戳的处理在各 Android 版本 / OEM 上并不一致，
-      // 最坏会丢掉回退的样本——成品的大小、轨道数、时长全都正常，
-      // 唯独画面一顿一顿的，极难从产物上判断。详见 FfmpegOps.remux 的注释。
-      // 精简包没有 FFmpeg，会自动回退到 MediaMuxer。
-      ok = await _remuxWithFfmpeg(videoPath, audioPath, output) ||
-          await NativeBridge.mux(
+      // 默认走系统 MediaMuxer：与系统播放器对 MP4 的处理最一致，
+      // 杜比视界这类带额外元数据的片源尤其依赖它。
+      // FFmpeg 只在用户显式切换时才用——它的 -map/-strict 组合在部分机型上
+      // 会产出播不了的成品，绝不能做默认。切了 FFmpeg 但失败时仍回退 MediaMuxer。
+      ok = settings.useFfmpegForMux
+          ? (await _remuxWithFfmpeg(videoPath, audioPath, output) ||
+              await NativeBridge.mux(
+                  video: videoPath, audio: audioPath, output: output))
+          : await NativeBridge.mux(
               video: videoPath, audio: audioPath, output: output);
     }
 

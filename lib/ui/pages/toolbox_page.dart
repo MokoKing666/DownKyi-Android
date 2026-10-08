@@ -672,13 +672,15 @@ class ToolboxPage extends StatelessWidget {
             : '$current.mp4');
 
     if (context.mounted) tdLoadingShow(context, text: '合并中');
-    // 优先 FFmpeg 无损封装，失败或不可用（精简包）时回退系统 MediaMuxer。
-    // 详见 FfmpegOps.remux 的注释。
-    final ok = await _remuxWithFfmpeg(
-          video: hasVideo ? videoPath : null,
-          audio: hasAudio ? audioPath : null,
-          output: target,
-        ) ||
+    // 默认走系统 MediaMuxer（与播放器兼容性最好）；只有用户显式切到 FFmpeg
+    // 时才先试 FFmpeg，失败仍回退 MediaMuxer。详见 MuxEngine 的注释。
+    final ok = (manager.settings.useFfmpegForMux
+            ? await _remuxWithFfmpeg(
+                video: hasVideo ? videoPath : null,
+                audio: hasAudio ? audioPath : null,
+                output: target,
+              )
+            : false) ||
         await NativeBridge.mux(
           video: hasVideo ? videoPath : null,
           audio: hasAudio ? audioPath : null,

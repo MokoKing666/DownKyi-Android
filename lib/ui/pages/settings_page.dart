@@ -292,6 +292,30 @@ class SettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: TdSpacer.small),
 
+          // ---------------- 合并方式 ----------------
+          TdSection(
+            title: '合并方式',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TdChoiceGroup<MuxEngine>(
+                  items: MuxEngine.values,
+                  selected: settings.muxEngine,
+                  labelBuilder: (value) => value.label,
+                  onSelect: (value) =>
+                      settings.update(() => settings.muxEngine = value),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  settings.muxEngine.description,
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
           // ---------------- 弹幕样式 ----------------
           TdSection(
             title: '弹幕样式',

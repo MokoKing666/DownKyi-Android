@@ -4,9 +4,39 @@ library;
 class AppInfo {
   static const String name = '哔哩哔哩下载姬';
   static const String englishName = 'DownKyi';
-  static const String version = '2.0.4';
+  static const String version = '2.0.5';
   static const String disclaimer = '本应用仅提供视频解析与本地下载能力，不提供任何内容存储服务。'
       '所有内容版权归原作者所有，仅供个人学习交流，请勿用于商业用途，并支持原始发布者。';
+}
+
+/// 合并（重新封装）用哪套实现。
+///
+/// **默认必须是 `system`**：Android 自带的 MediaMuxer 与系统播放器对 MP4 的
+/// 处理最一致，兼容性最好——尤其杜比视界一类带额外元数据的片源。
+/// FFmpeg 的 `-c copy` 在纸面上更"标准"，但实测在某些机型上会产出
+/// 播不了的成品（轨道结构 / 标签写法与系统播放器预期不一致）。
+///
+/// `ffmpeg` 留作**手动备用**：MediaMuxer 在部分设备上对 B 帧回退的 PTS
+/// 处理有差异，表现是「画面一顿一顿」，这时切到 FFmpeg 可以绕开。
+/// 但默认绝不能是它——封装是核心链路，宁可稳，不要"理论上更好"。
+enum MuxEngine {
+  system,
+  ffmpeg;
+
+  String get label => switch (this) {
+        MuxEngine.system => '系统封装（推荐）',
+        MuxEngine.ffmpeg => 'FFmpeg 重封装',
+      };
+
+  String get description => switch (this) {
+        MuxEngine.system => '用 Android 自带的 MediaMuxer，与系统播放器兼容性最好；杜比视界等片源请用它',
+        MuxEngine.ffmpeg => '用内置 FFmpeg 的 -c copy；仅在遇到「合并后画面一顿一顿」时切换，个别人可能播不了',
+      };
+
+  static MuxEngine fromName(String? name) => MuxEngine.values.firstWhere(
+        (value) => value.name == name,
+        orElse: () => MuxEngine.system,
+      );
 }
 
 /// 构建变体（评审第 27 项）。
