@@ -150,6 +150,24 @@ object MediaMuxerHelper {
                 if (pick < 0) break
 
                 val ref = refs[pick]
+
+                // ⚠️ 读到哪条轨，就必须先切到哪条轨。这一行是整个封装正确性的前提。
+                //
+                // MediaExtractor 的 sampleTime / readSampleData 读的都是**「当前选中轨」**，
+                // 而 selectTrack 的作用正是「把该轨设为当前轨」。同一个 extractor 上
+                // 选中多条轨时，当前轨永远停在**最后一次 selectTrack** 的那一条上——
+                // 上面的初始化循环把每条轨都 select 了一遍，于是当前轨留在了最后一条。
+                //
+                // 不在这里重新切换的后果（实测踩过）：
+                //   • 两条轨的 ref 都在读同一条轨的数据，同一条数据被写两遍
+                //     → 成品体积正好翻倍
+                //   • 轨道声明的格式来自 A 轨，写进去的样本却来自 B 轨
+                //     → 格式与数据不一致，播放器直接打不开
+                //
+                // v1.0.0 的实现把 extractor 和轨号一起传进 writeSample，
+                // 每次读之前都切换，所以它是正常的。这一行就是那个差异。
+                ref.extractor.selectTrack(ref.source)
+
                 buffer.clear()
                 val size: Int
                 try {

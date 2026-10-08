@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.7（versionCode 21） |
+| 版本 | v2.0.8（versionCode 22） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,43 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v2.0.8 —— 真正的根因：读样本前没有切轨（拆 v1.0.0 字节码得到）
+
+**这次的结论来自反汇编 v1.0.0 的 APK，不是推理。**
+
+先把 `DownKyi-v1.0.0-arm64-v8a.apk` 拆开（`dexdump`）对比，两个决定性发现：
+
+1. **v1.0.0 只有 20.72 MB，包内没有任何 FFmpeg 库** —— 它的合并纯走 MediaMuxer。
+   这印证了你的判断：引入 FFmpeg 之前确实是正常的。
+2. `MediaMuxerHelper` 的方法签名完全不同：
+
+```
+findTrack(extractor, mime): Int
+writeSample(extractor, muxer, targetTrack, buffer, info): Boolean
+```
+
+`writeSample` **把 extractor 和轨号一起传进去**——说明它每次读之前都切到目标轨。
+而我们的代码只在初始化时 `selectTrack` 过一遍，之后再也没切过。
+
+**这一行就是全部差异。**
+
+MediaExtractor 的 `sampleTime` / `readSampleData` 读的都是**「当前选中轨」**，
+当前轨停在**最后一次 `selectTrack`** 的那一条上——初始化循环把每条轨都 select 了一遍，
+于是当前轨留在了最后一条。后果：
+
+| 现象 | 原因 |
+|---|---|
+| 体积正好翻倍 | 两条轨的 ref 都在读同一条轨，同一份数据被写了两遍 |
+| 播不了 | 轨道声明的格式来自 A 轨，写进去的样本来自 B 轨——格式与数据不一致 |
+| v2.0.6 修好体积但打不开 | 轨道**数量**对了，但读的还是错的那条轨 |
+
+修复：在每次 `readSampleData` 之前 `selectTrack(ref.source)`。
+
+> 这条 bug 从 v1.2.1（仓库第一个提交）就存在，一直没被发现过，
+> 因为它只在**同一个文件里有多条音视频轨**时才会暴露——
+> 而 DASH 的视频、音频是两个独立文件，各自只有一条轨，所以一直"看起来正常"。
+> 杜比视界片源恰好是单文件多轨（基础层 + 增强层），才把它逼了出来。
 
 ### v2.0.6 —— 真正的根因：成品里有两条视频轨
 
@@ -930,7 +967,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.7-arm64-v8a.apk
+adb install -r DownKyi-v2.0.8-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
