@@ -107,7 +107,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  subscription.title.isEmpty ? '未命名订阅 ${subscription.sourceId}' : subscription.title,
+                  subscription.title.isEmpty
+                      ? '未命名订阅 ${subscription.sourceId}'
+                      : subscription.title,
                   style: TdText.titleSmall,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -156,8 +158,12 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               ),
               TDButton(
                 text: subscription.autoDownload ? '自动下载：开' : '自动下载：关',
-                theme: subscription.autoDownload ? TDButtonTheme.primary : TDButtonTheme.light,
-                type: subscription.autoDownload ? TDButtonType.outline : TDButtonType.fill,
+                theme: subscription.autoDownload
+                    ? TDButtonTheme.primary
+                    : TDButtonTheme.light,
+                type: subscription.autoDownload
+                    ? TDButtonType.outline
+                    : TDButtonType.fill,
                 size: TDButtonSize.extraSmall,
                 onTap: () => unawaited(_toggleAutoDownload(subscription)),
               ),
@@ -178,7 +184,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   Widget _buildBottomBar() {
     return Container(
       color: TdPalette.container,
-      padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.small),
+      padding: const EdgeInsets.symmetric(
+          horizontal: TdSpacer.medium, vertical: TdSpacer.small),
       child: SafeArea(
         top: false,
         child: Row(
@@ -246,7 +253,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
             child: const Text('添加'),
           ),
         ],
@@ -284,7 +292,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     tdToastSuccess(context, '已添加订阅');
   }
 
-  Future<void> _checkOne(Subscription subscription, {bool silent = false}) async {
+  Future<void> _checkOne(Subscription subscription,
+      {bool silent = false}) async {
     if (mounted) setState(() => _checking = true);
     try {
       final result = await _service.check(subscription);
@@ -311,7 +320,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     try {
       final results = await _service.checkAll();
       if (!mounted) return;
-      final found = results.fold<int>(0, (sum, item) => sum + item.newItems.length);
+      final found =
+          results.fold<int>(0, (sum, item) => sum + item.newItems.length);
       final failed = results.where((item) => item.failed).length;
       if (failed == results.length && results.isNotEmpty) {
         tdToastError(context, '全部检查失败，请确认已登录');
@@ -413,7 +423,9 @@ class _SubscriptionItemsPageState extends State<SubscriptionItemsPage> {
   @override
   Widget build(BuildContext context) {
     return TdPage(
-      title: widget.subscription.title.isEmpty ? '订阅内容' : widget.subscription.title,
+      title: widget.subscription.title.isEmpty
+          ? '订阅内容'
+          : widget.subscription.title,
       showDivider: true,
       backgroundColor: TdPalette.pageBackground,
       child: _loading
@@ -424,14 +436,17 @@ class _SubscriptionItemsPageState extends State<SubscriptionItemsPage> {
                   children: <Widget>[
                     Expanded(
                       child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: TdSpacer.medium),
                         itemCount: _items.length,
                         itemBuilder: (context, index) {
                           final item = _items[index];
                           return VideoInfoTile(
                             title: item.title,
                             cover: item.cover,
-                            subtitle: item.epId == null ? item.bvid : 'ep${item.epId}',
+                            subtitle: item.epId == null
+                                ? item.bvid
+                                : 'ep${item.epId}',
                             durationMs: item.durationMs,
                             leading: TDCheckbox(
                               checked: _selected.contains(item.key),
@@ -475,7 +490,8 @@ class _SubscriptionItemsPageState extends State<SubscriptionItemsPage> {
   }
 
   Future<void> _download() async {
-    final selected = _items.where((item) => _selected.contains(item.key)).toList();
+    final selected =
+        _items.where((item) => _selected.contains(item.key)).toList();
     if (selected.isEmpty) return;
     final items = selected
         .map((item) => MediaItem(
@@ -486,7 +502,9 @@ class _SubscriptionItemsPageState extends State<SubscriptionItemsPage> {
               cover: item.cover,
               durationMs: item.durationMs,
               epId: item.epId,
-              btype: item.epId == null ? BiliConst.typeVideo : BiliConst.typeBangumi,
+              btype: item.epId == null
+                  ? BiliConst.typeVideo
+                  : BiliConst.typeBangumi,
             ))
         .toList();
 

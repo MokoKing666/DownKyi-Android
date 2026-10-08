@@ -30,7 +30,8 @@ class TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TdSection(
-      margin: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.xxs),
+      margin: const EdgeInsets.symmetric(
+          horizontal: TdSpacer.medium, vertical: TdSpacer.xxs),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -47,7 +48,8 @@ class TaskTile extends StatelessWidget {
                       : Image.network(
                           task.cover,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stack) => Container(color: TdPalette.gray2),
+                          errorBuilder: (context, error, stack) =>
+                              Container(color: TdPalette.gray2),
                         ),
                 ),
               ),
@@ -100,19 +102,23 @@ class TaskTile extends StatelessWidget {
 
   Widget _buildStatusLine() {
     final style = TdText.bodySmall.copyWith(
-      color: task.status == TaskStatus.failed ? TdPalette.error : TdPalette.textSecondary,
+      color: task.status == TaskStatus.failed
+          ? TdPalette.error
+          : TdPalette.textSecondary,
     );
     final text = switch (task.status) {
       TaskStatus.queued => '等待开始',
       TaskStatus.running =>
         '${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)} · '
             '${formatSpeed(task.speed)} · 剩余 ${formatEta(task.remainSeconds)}',
-      TaskStatus.paused => '已暂停 · ${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}',
+      TaskStatus.paused =>
+        '已暂停 · ${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}',
       TaskStatus.merging => '正在合并音视频…',
       TaskStatus.completed => _completedText(task),
       TaskStatus.failed => task.error ?? '下载失败',
     };
-    return Text(text, style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
+    return Text(text,
+        style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
   }
 
   /// 视频本体完成，但封面 / 弹幕 / 字幕里可能有失败项。

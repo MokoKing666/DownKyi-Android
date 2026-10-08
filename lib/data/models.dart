@@ -21,7 +21,8 @@ Map<String, dynamic> asMap(dynamic value) {
   return const <String, dynamic>{};
 }
 
-List<dynamic> asList(dynamic value) => value is List ? value : const <dynamic>[];
+List<dynamic> asList(dynamic value) =>
+    value is List ? value : const <dynamic>[];
 
 /// HTTP url 补全协议
 String normalizeUrl(String url) {
@@ -138,7 +139,11 @@ class VideoDetail {
       cid: asInt(episode['cid']),
       title: fullTitle,
       cover: normalizeUrl(asString(episode['cover'] ?? season['cover'])),
-      ownerName: season['up_name'] == null ? btype == 'cheese' ? '课程' : '番剧' : asString(season['up_name']),
+      ownerName: season['up_name'] == null
+          ? btype == 'cheese'
+              ? '课程'
+              : '番剧'
+          : asString(season['up_name']),
       ownerMid: asInt(asMap(season['up_info'])['mid']),
       durationMs: durationSeconds * 1000,
       btype: btype,
@@ -201,7 +206,8 @@ class DashStream {
   final String frameRate;
   final bool isVideo;
 
-  factory DashStream.fromJson(Map<String, dynamic> json, {required bool isVideo}) {
+  factory DashStream.fromJson(Map<String, dynamic> json,
+      {required bool isVideo}) {
     final base = asString(json['baseUrl'] ?? json['base_url']);
     final backups = asList(json['backupUrl'] ?? json['backup_url'])
         .map((item) => normalizeUrl(item.toString()))
@@ -211,7 +217,8 @@ class DashStream {
       url: normalizeUrl(base),
       backupUrls: backups,
       bandwidth: asInt(json['bandwidth']),
-      mimeType: asString(json['mimeType'] ?? json['mime_type'], isVideo ? 'video/mp4' : 'audio/mp4'),
+      mimeType: asString(json['mimeType'] ?? json['mime_type'],
+          isVideo ? 'video/mp4' : 'audio/mp4'),
       codecs: asString(json['codecs']),
       width: asInt(json['width']),
       height: asInt(json['height']),
@@ -280,7 +287,8 @@ class DashInfo {
       if (candidates.isEmpty) return null;
     }
     if (preferCodec != null && preferCodec.isNotEmpty) {
-      final matched = candidates.where((item) => item.codecFamily == preferCodec).toList();
+      final matched =
+          candidates.where((item) => item.codecFamily == preferCodec).toList();
       if (matched.isNotEmpty) candidates = matched;
     }
     candidates = List<DashStream>.from(candidates)
@@ -366,11 +374,14 @@ class MediaItem {
     return 0;
   }
 
-  factory MediaItem.fromJson(Map<String, dynamic> json, {String btype = 'video'}) {
+  factory MediaItem.fromJson(Map<String, dynamic> json,
+      {String btype = 'video'}) {
     final owner = asMap(json['owner'] ?? json['upper']);
     final durationRaw = asInt(json['duration']);
     // 普通视频接口返回秒，部分接口返回毫秒
-    final durationMs = durationRaw > 0 && durationRaw < 100000 ? durationRaw * 1000 : durationRaw;
+    final durationMs = durationRaw > 0 && durationRaw < 100000
+        ? durationRaw * 1000
+        : durationRaw;
     return MediaItem(
       bvid: asString(json['bvid']),
       cid: resolveCid(json),
@@ -378,7 +389,8 @@ class MediaItem {
       title: asString(json['title'], '未命名'),
       cover: normalizeUrl(asString(json['cover'] ?? json['pic'])),
       durationMs: durationMs,
-      ownerName: asString(owner['name'] ?? json['author'] ?? json['upper_name']),
+      ownerName:
+          asString(owner['name'] ?? json['author'] ?? json['upper_name']),
       btype: btype,
       epId: json['ep_id'] == null ? null : asInt(json['ep_id']),
     );
@@ -409,7 +421,8 @@ class BatchResult {
   final bool hasMore;
   final int page;
 
-  BatchResult copyWith({List<MediaItem>? items, bool? hasMore, int? page}) => BatchResult(
+  BatchResult copyWith({List<MediaItem>? items, bool? hasMore, int? page}) =>
+      BatchResult(
         title: title,
         items: items ?? this.items,
         cover: cover,
@@ -461,7 +474,8 @@ class NavInfo {
       face: normalizeUrl(asString(data['face'])),
       mid: asInt(data['mid']),
       level: asInt(levelInfo['current_level']),
-      vipLabel: vip['label'] == null ? '' : asString(asMap(vip['label'])['text']),
+      vipLabel:
+          vip['label'] == null ? '' : asString(asMap(vip['label'])['text']),
       coins: asInt(data['money']),
     );
   }

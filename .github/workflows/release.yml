@@ -1,0 +1,107 @@
+name: Release
+
+# 文档要求的发布链路：Tag → 自动构建 APK → 计算 SHA256 → GitHub Release
+#
+# 两种触发方式：
+#   1. push tag（v*）：正式发布
+#   2. workflow_dispatch：手动指定一个已存在的 tag，用于发布前试跑
+#
+# 注意：本工作流与本地脚本 tools/publish_release.ps1 二选一即可，
+# 两者产物相同（文件名 DownKyi-<tag>-arm64-v8a.apk）。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag（如 v2.0.0），必须已存在'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: 构建并发布 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: 准备修补过的 tdesign_flutter
+        shell: pwsh
+        run: ./tools/prepare_tdesign.ps1
+
+      # 发布前先过一遍检查，避免把坏版本发出去
+      - name: flutter analyze
+        run: flutter analyze
+
+      - name: flutter test
+        run: flutter test
+
+      - name: 构建 arm64-v8a release APK
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: 计算校验值并准备说明
+        id: artifact
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          NAME="DownKyi-${TAG}-arm64-v8a.apk"
+          cp "$APK" "$NAME"
+          SHA=$(sha256sum "$NAME" | awk '{print $1}')
+          SIZE=$(stat -c%s "$NAME")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+
+          # 从 README 的更新日志里抽出对应版本那一节
+          VERSION="${TAG#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^### v" ver { found=1; next }
+            found && /^### v/ { exit }
+            found { print }
+          ' README.md > notes.md || true
+
+          if [ ! -s notes.md ]; then
+            echo "（README 中没有 v${VERSION} 的更新日志章节）" > notes.md
+          fi
+
+          {
+            echo "## DownKyi ${TAG}"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "|---|---|"
+            echo "| 文件 | \`${NAME}\` |"
+            echo "| 体积 | $((SIZE / 1048576)) MB |"
+            echo "| SHA256 | \`${SHA}\` |"
+            echo ""
+            cat notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 创建 / 更新 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.artifact.outputs.tag }}
+          name: ${{ steps.artifact.outputs.tag }}
+          files: ${{ steps.artifact.outputs.name }}
+          body_path: notes.md
+          generate_release_notes: false

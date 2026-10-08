@@ -32,7 +32,8 @@ class MediaProbe {
   final bool hasVideo;
   final bool hasAudio;
 
-  String get resolutionLabel => (width > 0 && height > 0) ? '${width}x$height' : '';
+  String get resolutionLabel =>
+      (width > 0 && height > 0) ? '${width}x$height' : '';
 
   String get summary {
     final parts = <String>[
@@ -142,69 +143,110 @@ class FfmpegService {
     switch (target) {
       case ConvertTarget.mp4Copy:
         return <String>[
-          '-y', '-i', input,
-          '-c', 'copy',
-          '-movflags', '+faststart',
+          '-y',
+          '-i',
+          input,
+          '-c',
+          'copy',
+          '-movflags',
+          '+faststart',
           output,
         ];
       case ConvertTarget.mkvCopy:
         return <String>['-y', '-i', input, '-c', 'copy', output];
       case ConvertTarget.mp3:
         return <String>[
-          '-y', '-i', input,
+          '-y',
+          '-i',
+          input,
           '-vn',
-          '-c:a', 'libmp3lame',
-          '-b:a', '192k',
+          '-c:a',
+          'libmp3lame',
+          '-b:a',
+          '192k',
           output,
         ];
       case ConvertTarget.m4a:
         return <String>[
-          '-y', '-i', input,
+          '-y',
+          '-i',
+          input,
           '-vn',
-          '-c:a', 'aac',
-          '-b:a', '192k',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '192k',
           output,
         ];
       case ConvertTarget.gif:
         final fps = gifFps.clamp(5, 30);
         return <String>[
-          '-y', '-i', input,
-          '-t', '10',
-          '-vf', 'fps=$fps,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
-          '-loop', '0',
+          '-y',
+          '-i',
+          input,
+          '-t',
+          '10',
+          '-vf',
+          'fps=$fps,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
+          '-loop',
+          '0',
           output,
         ];
       case ConvertTarget.compress:
         return <String>[
-          '-y', '-i', input,
-          '-c:v', 'libx264',
-          '-crf', '26',
-          '-preset', 'veryfast',
-          '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-          '-c:a', 'aac',
-          '-b:a', '128k',
-          '-movflags', '+faststart',
+          '-y',
+          '-i',
+          input,
+          '-c:v',
+          'libx264',
+          '-crf',
+          '26',
+          '-preset',
+          'veryfast',
+          '-vf',
+          'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '128k',
+          '-movflags',
+          '+faststart',
           output,
         ];
       case ConvertTarget.avcToHevc:
         return <String>[
-          '-y', '-i', input,
-          '-c:v', 'libx265',
-          '-crf', '26',
-          '-preset', 'veryfast',
-          '-tag:v', 'hvc1',
-          '-c:a', 'copy',
+          '-y',
+          '-i',
+          input,
+          '-c:v',
+          'libx265',
+          '-crf',
+          '26',
+          '-preset',
+          'veryfast',
+          '-tag:v',
+          'hvc1',
+          '-c:a',
+          'copy',
           output,
         ];
       case ConvertTarget.hevcToAvc:
         return <String>[
-          '-y', '-i', input,
-          '-c:v', 'libx264',
-          '-crf', '23',
-          '-preset', 'veryfast',
-          '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-          '-c:a', 'copy',
-          '-movflags', '+faststart',
+          '-y',
+          '-i',
+          input,
+          '-c:v',
+          'libx264',
+          '-crf',
+          '23',
+          '-preset',
+          'veryfast',
+          '-vf',
+          'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+          '-c:a',
+          'copy',
+          '-movflags',
+          '+faststart',
           output,
         ];
     }
@@ -217,7 +259,8 @@ class FfmpegService {
     void Function(double progress)? onProgress,
   }) async {
     if (_currentSession != null) {
-      return const FfmpegResult(success: false, cancelled: false, message: '已有转换任务正在执行');
+      return const FfmpegResult(
+          success: false, cancelled: false, message: '已有转换任务正在执行');
     }
     AppLog.d('FFmpeg', '执行：${FFmpegKitConfig.argumentsToString(arguments)}');
 
@@ -257,24 +300,29 @@ class FfmpegService {
     }
   }
 
-  static Future<void> _finish(FFmpegSession session, Completer<FfmpegResult> completer) async {
+  static Future<void> _finish(
+      FFmpegSession session, Completer<FfmpegResult> completer) async {
     if (completer.isCompleted) return;
     try {
       final returnCode = await session.getReturnCode();
       final output = await session.getOutput() ?? '';
       if (ReturnCode.isSuccess(returnCode)) {
-        completer.complete(const FfmpegResult(success: true, cancelled: false, message: ''));
+        completer.complete(
+            const FfmpegResult(success: true, cancelled: false, message: ''));
         return;
       }
       if (ReturnCode.isCancel(returnCode)) {
-        completer.complete(const FfmpegResult(success: false, cancelled: true, message: '已取消'));
+        completer.complete(const FfmpegResult(
+            success: false, cancelled: true, message: '已取消'));
         return;
       }
       completer.complete(
-        FfmpegResult(success: false, cancelled: false, message: _tailOf(output)),
+        FfmpegResult(
+            success: false, cancelled: false, message: _tailOf(output)),
       );
     } catch (error) {
-      completer.complete(FfmpegResult(success: false, cancelled: false, message: '$error'));
+      completer.complete(
+          FfmpegResult(success: false, cancelled: false, message: '$error'));
     }
   }
 

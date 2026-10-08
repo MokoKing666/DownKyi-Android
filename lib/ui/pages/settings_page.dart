@@ -44,7 +44,8 @@ class SettingsPage extends StatelessWidget {
                 const SizedBox(height: TdSpacer.xs),
                 Text(
                   '默认「简洁白」，强调色为哔哩哔哩粉；已移除原有的蓝色主题。',
-                  style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
                 ),
               ],
             ),
@@ -61,7 +62,8 @@ class SettingsPage extends StatelessWidget {
                   items: SaveLocation.values,
                   selected: settings.saveLocation,
                   labelBuilder: (value) => value.label,
-                  onSelect: (value) => settings.update(() => settings.saveLocation = value),
+                  onSelect: (value) =>
+                      settings.update(() => settings.saveLocation = value),
                 ),
                 const SizedBox(height: TdSpacer.xs),
                 FutureBuilder<String>(
@@ -84,7 +86,8 @@ class SettingsPage extends StatelessWidget {
                           title: '自定义下载目录',
                           hint: '例如 /storage/emulated/0/Download/DownKyi',
                           initial: settings.downloadDir,
-                          onSave: (value) => settings.update(() => settings.downloadDir = value),
+                          onSave: (value) => settings
+                              .update(() => settings.downloadDir = value),
                         ),
                       ),
                     ],
@@ -97,7 +100,8 @@ class SettingsPage extends StatelessWidget {
                           '弹幕 / 字幕 → Downloads/${AppInfo.englishName}。其他应用与相册都能直接看到。'
                       : '保存在应用目录或自定义目录时不进入媒体库，卸载应用会删除应用目录内的文件；'
                           '需要长期保存请在下载页或工具箱用「导出到相册」。',
-                  style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
                 ),
               ],
             ),
@@ -114,14 +118,17 @@ class SettingsPage extends StatelessWidget {
                   items: DownloadEngine.values,
                   selected: settings.downloadEngine,
                   labelBuilder: (value) => value.label,
-                  onSelect: (value) => settings.update(() => settings.downloadEngine = value),
+                  onSelect: (value) =>
+                      settings.update(() => settings.downloadEngine = value),
                 ),
                 const SizedBox(height: TdSpacer.xs),
                 Text(
                   settings.downloadEngine.description,
-                  style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
                 ),
-                if (settings.downloadEngine == DownloadEngine.aria2) ...<Widget>[
+                if (settings.downloadEngine ==
+                    DownloadEngine.aria2) ...<Widget>[
                   const SizedBox(height: TdSpacer.small),
                   TDCell(
                     title: 'RPC 地址',
@@ -133,8 +140,9 @@ class SettingsPage extends StatelessWidget {
                       hint: 'http://127.0.0.1:6800/jsonrpc',
                       initial: settings.aria2RpcUrl,
                       onSave: (value) => settings.update(
-                        () => settings.aria2RpcUrl =
-                            value.isEmpty ? SettingsStore.defaultAria2Url : value,
+                        () => settings.aria2RpcUrl = value.isEmpty
+                            ? SettingsStore.defaultAria2Url
+                            : value,
                       ),
                     ),
                   ),
@@ -148,29 +156,35 @@ class SettingsPage extends StatelessWidget {
                       hint: '留空表示未启用',
                       initial: settings.aria2Secret,
                       obscure: true,
-                      onSave: (value) => settings.update(() => settings.aria2Secret = value),
+                      onSave: (value) =>
+                          settings.update(() => settings.aria2Secret = value),
                     ),
                   ),
                   TDCell(
                     title: '落盘目录',
-                    description: settings.aria2Dir.isEmpty ? '使用 aria2 默认目录' : settings.aria2Dir,
+                    description: settings.aria2Dir.isEmpty
+                        ? '使用 aria2 默认目录'
+                        : settings.aria2Dir,
                     arrow: true,
                     onClick: (cell) => _editText(
                       context,
                       title: 'aria2 落盘目录',
                       hint: 'aria2 所在设备上的路径，例如 /volume1/downloads',
                       initial: settings.aria2Dir,
-                      onSave: (value) => settings.update(() => settings.aria2Dir = value),
+                      onSave: (value) =>
+                          settings.update(() => settings.aria2Dir = value),
                     ),
                   ),
                   const SizedBox(height: TdSpacer.xs),
-                  Text('单文件连接数：${settings.aria2Split}', style: TdText.bodyMedium),
+                  Text('单文件连接数：${settings.aria2Split}',
+                      style: TdText.bodyMedium),
                   const SizedBox(height: TdSpacer.xs),
                   TdChoiceGroup<int>(
                     items: const <int>[4, 8, 16],
                     selected: settings.aria2Split,
                     labelBuilder: (value) => '$value',
-                    onSelect: (value) => settings.update(() => settings.aria2Split = value),
+                    onSelect: (value) =>
+                        settings.update(() => settings.aria2Split = value),
                   ),
                   const SizedBox(height: TdSpacer.xs),
                   Row(
@@ -188,7 +202,8 @@ class SettingsPage extends StatelessWidget {
                     'Aria2 模式下任务由 aria2 执行，文件落在 aria2 所在设备（NAS / 电脑 / Termux 等），'
                     'App 负责下发任务与显示进度，不参与合并与相册导出。\n'
                     '如果需要「自动合并并存入系统相册」，请使用内置下载器。',
-                    style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                    style: TdText.bodySmall
+                        .copyWith(color: TdPalette.textPlaceholder),
                   ),
                 ],
               ],
@@ -202,22 +217,26 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('同时下载任务数：${settings.concurrentTasks}', style: TdText.bodyMedium),
+                Text('同时下载任务数：${settings.concurrentTasks}',
+                    style: TdText.bodyMedium),
                 const SizedBox(height: TdSpacer.xs),
                 TdChoiceGroup<int>(
                   items: const <int>[1, 2, 3, 4],
                   selected: settings.concurrentTasks,
                   labelBuilder: (value) => '$value 个',
-                  onSelect: (value) => settings.update(() => settings.concurrentTasks = value),
+                  onSelect: (value) =>
+                      settings.update(() => settings.concurrentTasks = value),
                 ),
                 const SizedBox(height: TdSpacer.medium),
-                Text('单任务分片线程数：${settings.segmentConcurrency}', style: TdText.bodyMedium),
+                Text('单任务分片线程数：${settings.segmentConcurrency}',
+                    style: TdText.bodyMedium),
                 const SizedBox(height: TdSpacer.xs),
                 TdChoiceGroup<int>(
                   items: const <int>[1, 2, 4, 8, 16],
                   selected: settings.segmentConcurrency,
                   labelBuilder: (value) => '$value 线程',
-                  onSelect: (value) => settings.update(() => settings.segmentConcurrency = value),
+                  onSelect: (value) => settings
+                      .update(() => settings.segmentConcurrency = value),
                 ),
               ],
             ),
@@ -230,8 +249,10 @@ class SettingsPage extends StatelessWidget {
             child: TdChoiceGroup<int>(
               items: BiliConst.qualityNames.keys.toList(),
               selected: settings.defaultQuality,
-              labelBuilder: (value) => BiliConst.qualityNames[value] ?? '$value',
-              onSelect: (value) => settings.update(() => settings.defaultQuality = value),
+              labelBuilder: (value) =>
+                  BiliConst.qualityNames[value] ?? '$value',
+              onSelect: (value) =>
+                  settings.update(() => settings.defaultQuality = value),
             ),
           ),
           const SizedBox(height: TdSpacer.small),
@@ -247,7 +268,8 @@ class SettingsPage extends StatelessWidget {
                 'av1' => 'AV1',
                 _ => 'AVC / H.264',
               },
-              onSelect: (value) => settings.update(() => settings.codecPreference = value),
+              onSelect: (value) =>
+                  settings.update(() => settings.codecPreference = value),
             ),
           ),
           const SizedBox(height: TdSpacer.small),
@@ -261,7 +283,8 @@ class SettingsPage extends StatelessWidget {
                   .toList(growable: false),
               selected: settings.danmakuFormat,
               labelBuilder: (value) => value.label,
-              onSelect: (value) => settings.update(() => settings.danmakuFormat = value),
+              onSelect: (value) =>
+                  settings.update(() => settings.danmakuFormat = value),
             ),
           ),
           const SizedBox(height: TdSpacer.small),
@@ -273,7 +296,8 @@ class SettingsPage extends StatelessWidget {
               items: SettingsStore.templates,
               selected: settings.fileNameTemplate,
               labelBuilder: settings.describeTemplate,
-              onSelect: (value) => settings.update(() => settings.fileNameTemplate = value),
+              onSelect: (value) =>
+                  settings.update(() => settings.fileNameTemplate = value),
             ),
           ),
           const SizedBox(height: TdSpacer.small),
@@ -286,28 +310,33 @@ class SettingsPage extends StatelessWidget {
                 TdSwitchRow(
                   title: '视频',
                   value: settings.downloadVideo,
-                  onChanged: (value) => settings.update(() => settings.downloadVideo = value),
+                  onChanged: (value) =>
+                      settings.update(() => settings.downloadVideo = value),
                 ),
                 TdSwitchRow(
                   title: '音频',
                   value: settings.downloadAudio,
-                  onChanged: (value) => settings.update(() => settings.downloadAudio = value),
+                  onChanged: (value) =>
+                      settings.update(() => settings.downloadAudio = value),
                 ),
                 TdSwitchRow(
                   title: '封面',
                   value: settings.downloadCover,
-                  onChanged: (value) => settings.update(() => settings.downloadCover = value),
+                  onChanged: (value) =>
+                      settings.update(() => settings.downloadCover = value),
                 ),
                 TdSwitchRow(
                   title: '弹幕',
                   value: settings.downloadDanmaku,
-                  onChanged: (value) => settings.update(() => settings.downloadDanmaku = value),
+                  onChanged: (value) =>
+                      settings.update(() => settings.downloadDanmaku = value),
                 ),
                 TdSwitchRow(
                   title: '字幕',
                   description: '需要视频本身有 CC 字幕',
                   value: settings.downloadSubtitle,
-                  onChanged: (value) => settings.update(() => settings.downloadSubtitle = value),
+                  onChanged: (value) =>
+                      settings.update(() => settings.downloadSubtitle = value),
                 ),
               ],
             ),
@@ -326,13 +355,15 @@ class SettingsPage extends StatelessWidget {
                   items: const <int>[8, 12, 16, 24],
                   selected: settings.gifFps,
                   labelBuilder: (value) => '$value fps',
-                  onSelect: (value) => settings.update(() => settings.gifFps = value),
+                  onSelect: (value) =>
+                      settings.update(() => settings.gifFps = value),
                 ),
                 const SizedBox(height: TdSpacer.xs),
                 Text(
                   '转换入口在「工具」页：可把已下载的视频无损封装为 MP4 / MKV、'
                   '提取 MP3 / M4A 音频、生成 GIF、压缩体积或在 H.264 与 H.265 之间互转。',
-                  style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
                 ),
               ],
             ),
@@ -350,7 +381,8 @@ class SettingsPage extends StatelessWidget {
                   description: '系统调度不保证准时，打开 App 时还会补检查一次',
                   value: settings.subscriptionCheckEnabled,
                   onChanged: (value) {
-                    settings.update(() => settings.subscriptionCheckEnabled = value);
+                    settings.update(
+                        () => settings.subscriptionCheckEnabled = value);
                     unawaited(SubscriptionScheduler.instance.apply(
                       enabled: value,
                       intervalHours: settings.subscriptionIntervalHours,
@@ -364,7 +396,8 @@ class SettingsPage extends StatelessWidget {
                     selected: settings.subscriptionIntervalHours,
                     labelBuilder: (value) => '$value 小时',
                     onSelect: (value) {
-                      settings.update(() => settings.subscriptionIntervalHours = value);
+                      settings.update(
+                          () => settings.subscriptionIntervalHours = value);
                       unawaited(SubscriptionScheduler.instance.apply(
                         enabled: settings.subscriptionCheckEnabled,
                         intervalHours: value,
@@ -386,13 +419,15 @@ class SettingsPage extends StatelessWidget {
                   title: '自动合并音视频',
                   description: '关闭后只下载分片，可在工具箱手动合并',
                   value: settings.mergeAv,
-                  onChanged: (value) => settings.update(() => settings.mergeAv = value),
+                  onChanged: (value) =>
+                      settings.update(() => settings.mergeAv = value),
                 ),
                 TdSwitchRow(
                   title: '仅 Wi-Fi 下载',
                   description: '移动网络下任务会自动暂停',
                   value: settings.wifiOnly,
-                  onChanged: (value) => settings.update(() => settings.wifiOnly = value),
+                  onChanged: (value) =>
+                      settings.update(() => settings.wifiOnly = value),
                 ),
                 const SizedBox(height: TdSpacer.xs),
                 Row(
@@ -444,9 +479,12 @@ class SettingsPage extends StatelessWidget {
           decoration: InputDecoration(hintText: hint),
         ),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('取消')),
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消')),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
             child: const Text('保存'),
           ),
         ],
@@ -499,7 +537,9 @@ class SettingsPage extends StatelessWidget {
                 ),
         ),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('关闭')),
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('关闭')),
         ],
       ),
     );
@@ -531,7 +571,8 @@ class _ThemeSummary extends StatelessWidget {
               height: 46,
               child: Row(
                 children: <Widget>[
-                  for (final color in style.preview) Expanded(child: ColoredBox(color: color)),
+                  for (final color in style.preview)
+                    Expanded(child: ColoredBox(color: color)),
                 ],
               ),
             ),

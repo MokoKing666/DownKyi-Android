@@ -49,7 +49,8 @@ class _LoginPageState extends State<LoginPage> {
                           padding: const EdgeInsets.all(TdSpacer.small),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(TdRadius.medium),
+                            borderRadius:
+                                BorderRadius.circular(TdRadius.medium),
                             border: Border.all(color: TdPalette.border),
                           ),
                           child: QrImageView(
@@ -93,7 +94,8 @@ class _LoginPageState extends State<LoginPage> {
                     color: TdPalette.gray1,
                     borderRadius: BorderRadius.circular(TdRadius.medium),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: TdSpacer.small),
                   child: TextField(
                     controller: _cookieController,
                     maxLines: 4,
@@ -102,7 +104,8 @@ class _LoginPageState extends State<LoginPage> {
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       hintText: 'SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx',
-                      hintStyle: TextStyle(color: TdPalette.textPlaceholder, fontSize: 12),
+                      hintStyle: TextStyle(
+                          color: TdPalette.textPlaceholder, fontSize: 12),
                     ),
                   ),
                 ),
@@ -120,8 +123,10 @@ class _LoginPageState extends State<LoginPage> {
           ),
           if (login.error != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
-              child: Text(login.error!, style: TdText.bodySmall.copyWith(color: TdPalette.error)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
+              child: Text(login.error!,
+                  style: TdText.bodySmall.copyWith(color: TdPalette.error)),
             ),
         ],
       ),
@@ -150,7 +155,9 @@ class _LoginPageState extends State<LoginPage> {
               width: 48,
               height: 48,
               child: (info?.face.isEmpty ?? true)
-                  ? Container(color: TdPalette.gray2, child: Icon(Icons.person, color: TdPalette.gray6))
+                  ? Container(
+                      color: TdPalette.gray2,
+                      child: Icon(Icons.person, color: TdPalette.gray6))
                   : Image.network(info!.face, fit: BoxFit.cover),
             ),
           ),

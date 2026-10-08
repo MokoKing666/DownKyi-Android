@@ -41,11 +41,13 @@ class DownloadOptionsPanel extends StatelessWidget {
   /// 是否拿到了真实的 dash 数据
   bool get _hasRealData => parse.dash != null;
 
-  List<int> get _qualities =>
-      _hasRealData ? parse.availableQualities : (fallbackQualities ?? const <int>[]);
+  List<int> get _qualities => _hasRealData
+      ? parse.availableQualities
+      : (fallbackQualities ?? const <int>[]);
 
-  List<String> get _codecs =>
-      _hasRealData ? parse.availableCodecs : const <String>['avc', 'hevc', 'av1'];
+  List<String> get _codecs => _hasRealData
+      ? parse.availableCodecs
+      : const <String>['avc', 'hevc', 'av1'];
 
   bool get _showAudio => _hasRealData && parse.availableAudios.isNotEmpty;
 
@@ -68,7 +70,8 @@ class DownloadOptionsPanel extends StatelessWidget {
     ];
 
     if (card) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: sections);
+      return Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: sections);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,7 +179,8 @@ class DownloadOptionsPanel extends StatelessWidget {
             padding: const EdgeInsets.only(top: TdSpacer.xs),
             child: Text(
               '只下封面 / 弹幕 / 字幕，不保存视频文件；这些文件会放进 Download 目录',
-              style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+              style:
+                  TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
             ),
           ),
       ],
@@ -193,7 +197,8 @@ class DownloadOptionsPanel extends StatelessWidget {
           selected: settings.saveLocation,
           labelBuilder: (value) => value.label,
           onSelect: (value) => _apply(
-            () => unawaited(settings.update(() => settings.saveLocation = value)),
+            () =>
+                unawaited(settings.update(() => settings.saveLocation = value)),
           ),
         ),
         const SizedBox(height: 6),
@@ -202,7 +207,8 @@ class DownloadOptionsPanel extends StatelessWidget {
             Expanded(
               child: Text(
                 _describeLocation(),
-                style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                style:
+                    TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
               ),
             ),
             if (settings.saveLocation == SaveLocation.custom)
@@ -253,13 +259,15 @@ class DownloadOptionsPanel extends StatelessWidget {
             child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
             child: const Text('保存'),
           ),
         ],
       ),
     );
     if (value == null) return;
-    _apply(() => unawaited(settings.update(() => settings.downloadDir = value)));
+    _apply(
+        () => unawaited(settings.update(() => settings.downloadDir = value)));
   }
 }

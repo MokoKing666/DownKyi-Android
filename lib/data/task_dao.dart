@@ -57,19 +57,24 @@ class TaskDao {
             extras_error TEXT
           )
         ''');
-        await db.execute('CREATE UNIQUE INDEX idx_task_key ON download_task(task_key)');
+        await db.execute(
+            'CREATE UNIQUE INDEX idx_task_key ON download_task(task_key)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         AppLog.d('DB', '数据库升级 $oldVersion -> $newVersion');
         // v2：Aria2 引擎任务 id + 相册导出状态
         if (oldVersion < 2) {
-          await db.execute('ALTER TABLE download_task ADD COLUMN aria2_gid TEXT');
-          await db.execute('ALTER TABLE download_task ADD COLUMN exported INTEGER');
-          await db.execute('ALTER TABLE download_task ADD COLUMN exported_path TEXT');
+          await db
+              .execute('ALTER TABLE download_task ADD COLUMN aria2_gid TEXT');
+          await db
+              .execute('ALTER TABLE download_task ADD COLUMN exported INTEGER');
+          await db.execute(
+              'ALTER TABLE download_task ADD COLUMN exported_path TEXT');
         }
         // v3：附加资源（封面 / 弹幕 / 字幕）的失败项
         if (oldVersion < 3) {
-          await db.execute('ALTER TABLE download_task ADD COLUMN extras_error TEXT');
+          await db.execute(
+              'ALTER TABLE download_task ADD COLUMN extras_error TEXT');
         }
       },
     );
@@ -123,7 +128,8 @@ class TaskDao {
   Future<void> delete(int id) async {
     try {
       final db = await _db;
-      await db.delete('download_task', where: 'id = ?', whereArgs: <Object?>[id]);
+      await db
+          .delete('download_task', where: 'id = ?', whereArgs: <Object?>[id]);
     } catch (error) {
       AppLog.e('DB', '删除任务失败', error);
     }
@@ -132,7 +138,8 @@ class TaskDao {
   Future<void> deleteByStatus(TaskStatus status) async {
     try {
       final db = await _db;
-      await db.delete('download_task', where: 'status = ?', whereArgs: <Object?>[status.name]);
+      await db.delete('download_task',
+          where: 'status = ?', whereArgs: <Object?>[status.name]);
     } catch (error) {
       AppLog.e('DB', '批量删除任务失败', error);
     }

@@ -71,7 +71,8 @@ class Aria2Client {
 
   bool get hasSecret => secret.isNotEmpty;
 
-  Future<dynamic> _call(String method, [List<dynamic> params = const <dynamic>[]]) async {
+  Future<dynamic> _call(String method,
+      [List<dynamic> params = const <dynamic>[]]) async {
     final Uri uri;
     try {
       uri = Uri.parse(rpcUrl.trim());
@@ -79,10 +80,12 @@ class Aria2Client {
       throw ApiException(-1, 'aria2 RPC 地址格式不正确：$rpcUrl');
     }
     if (!uri.hasScheme || uri.host.isEmpty) {
-      throw ApiException(-1, 'aria2 RPC 地址不完整（示例：http://127.0.0.1:6800/jsonrpc）');
+      throw ApiException(
+          -1, 'aria2 RPC 地址不完整（示例：http://127.0.0.1:6800/jsonrpc）');
     }
 
-    final client = _client ??= HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    final client = _client ??= HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10);
     final payload = jsonEncode(<String, dynamic>{
       'jsonrpc': '2.0',
       'id': 'downkyi-${++_id}',
@@ -98,10 +101,12 @@ class Aria2Client {
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       request.write(payload);
-      final response = await request.close().timeout(const Duration(seconds: 25));
+      final response =
+          await request.close().timeout(const Duration(seconds: 25));
       final body = await response.transform(utf8.decoder).join();
       if (body.trim().isEmpty) {
-        throw ApiException(response.statusCode, 'aria2 返回空响应（HTTP ${response.statusCode}）');
+        throw ApiException(
+            response.statusCode, 'aria2 返回空响应（HTTP ${response.statusCode}）');
       }
       final decoded = jsonDecode(body);
       if (decoded is! Map) {
@@ -109,7 +114,8 @@ class Aria2Client {
       }
       final error = decoded['error'];
       if (error != null) {
-        final message = error is Map ? '${error['message'] ?? '未知错误'}' : '$error';
+        final message =
+            error is Map ? '${error['message'] ?? '未知错误'}' : '$error';
         throw ApiException(-1, 'aria2 错误：$message');
       }
       return decoded['result'];
@@ -229,7 +235,8 @@ class Aria2Client {
       'auto-file-renaming': 'false',
       'referer': referer,
       'user-agent': userAgent,
-      if (cookie != null && cookie.isNotEmpty) 'header': <String>['Cookie: $cookie'],
+      if (cookie != null && cookie.isNotEmpty)
+        'header': <String>['Cookie: $cookie'],
     };
   }
 }

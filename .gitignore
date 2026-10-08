@@ -38,3 +38,7 @@ desktop.ini
 
 # 参考源码（本地研究用）
 .ref/
+
+# 由 tools/prepare_tdesign.ps1 生成（不进仓库，保证仓库不因第三方 UI 库膨胀）
+third_party/
+pubspec_overrides.yaml

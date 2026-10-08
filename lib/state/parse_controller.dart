@@ -11,7 +11,8 @@ import '../download/download_manager.dart';
 
 /// 解析流程控制器：链接 -> 视频 / 批量列表 -> 创建下载任务。
 class ParseController extends ChangeNotifier {
-  ParseController({required this.api, required this.manager, required this.settings});
+  ParseController(
+      {required this.api, required this.manager, required this.settings});
 
   final BiliApi api;
   final DownloadManager manager;
@@ -47,7 +48,8 @@ class ParseController extends ChangeNotifier {
 
   bool get isBatch => batch != null;
 
-  int get selectedCount => batch != null ? selectedKeys.length : selectedPages.length;
+  int get selectedCount =>
+      batch != null ? selectedKeys.length : selectedPages.length;
 
   List<int> get availableQualities {
     final info = dash;
@@ -61,9 +63,11 @@ class ParseController extends ChangeNotifier {
   List<String> get availableCodecs {
     final info = dash;
     if (info == null) return const <String>['avc'];
-    final families = info.videosOf(quality).map((item) => item.codecFamily).toSet().toList();
+    final families =
+        info.videosOf(quality).map((item) => item.codecFamily).toSet().toList();
     if (families.isEmpty) {
-      families.addAll(info.videos.map((item) => item.codecFamily).toSet().toList());
+      families
+          .addAll(info.videos.map((item) => item.codecFamily).toSet().toList());
     }
     if (families.isEmpty) families.add('avc');
     families.sort();
@@ -107,12 +111,14 @@ class ParseController extends ChangeNotifier {
     try {
       var link = parseLink(input);
       if (link.kind == LinkKind.shortLink) {
-        final target = link.raw.contains('http') ? link.raw : 'https://${link.raw}';
+        final target =
+            link.raw.contains('http') ? link.raw : 'https://${link.raw}';
         final resolved = await api.resolveShortLink(target);
         link = parseLink(resolved);
       }
       if (!link.isSupported || link.id == null) {
-        error = '无法识别的链接。支持 BV 号 / 视频链接 / 番剧 ep、ss / 收藏夹 / UP 主空间 / 合集 / b23 短链';
+        error =
+            '无法识别的链接。支持 BV 号 / 视频链接 / 番剧 ep、ss / 收藏夹 / UP 主空间 / 合集 / b23 短链';
         return false;
       }
       sourceKind = link.kind;
@@ -123,13 +129,15 @@ class ParseController extends ChangeNotifier {
           final detail = await api.videoDetail(link.id!);
           video = detail;
           final index = (link.page ?? 1) - 1;
-          selectedPages.add(index >= 0 && index < detail.pages.length ? index : 0);
+          selectedPages
+              .add(index >= 0 && index < detail.pages.length ? index : 0);
           break;
 
         case LinkKind.bangumiEp:
         case LinkKind.cheese:
           final isCheese = link.kind == LinkKind.cheese;
-          final result = await api.seasonInfo(isCheese: isCheese, epId: int.parse(link.id!));
+          final result = await api.seasonInfo(
+              isCheese: isCheese, epId: int.parse(link.id!));
           _applyEpisode(result.season, result.rawEpisodes, link.id!, isCheese);
           if (result.items.length > 1) {
             // 同时保留整季列表，便于批量下载
@@ -138,7 +146,8 @@ class ParseController extends ChangeNotifier {
           break;
 
         case LinkKind.bangumiSeason:
-          final seasonResult = await api.seasonInfo(isCheese: false, seasonId: int.parse(link.id!));
+          final seasonResult = await api.seasonInfo(
+              isCheese: false, seasonId: int.parse(link.id!));
           batch = BatchResult(
             title: asString(seasonResult.season['title'], '番剧'),
             cover: normalizeUrl(asString(seasonResult.season['cover'])),
@@ -182,7 +191,8 @@ class ParseController extends ChangeNotifier {
       }
       return true;
     } catch (exception) {
-      error = exception is ApiException ? exception.message : exception.toString();
+      error =
+          exception is ApiException ? exception.message : exception.toString();
       AppLog.e('Parse', '解析失败', exception);
       return false;
     } finally {
@@ -197,7 +207,8 @@ class ParseController extends ChangeNotifier {
     String epId,
     bool isCheese,
   ) {
-    var index = episodes.indexWhere((item) => asInt(item['id']).toString() == epId);
+    var index =
+        episodes.indexWhere((item) => asInt(item['id']).toString() == epId);
     if (index < 0) index = 0;
     if (episodes.isEmpty) {
       throw ApiException(-1, '未获取到剧集信息，可能需要大会员或该内容已下架');
@@ -304,7 +315,8 @@ class ParseController extends ChangeNotifier {
       return true;
     } catch (exception) {
       dash = null;
-      referenceError = exception is ApiException ? exception.message : '$exception';
+      referenceError =
+          exception is ApiException ? exception.message : '$exception';
       AppLog.e('Parse', '批量参考视频解析失败', exception);
       notifyListeners();
       return false;
@@ -317,8 +329,11 @@ class ParseController extends ChangeNotifier {
   Future<void> loadQualities() async {
     final detail = video;
     if (detail == null) return;
-    final index = selectedPages.isEmpty ? 0 : selectedPages.reduce((a, b) => a < b ? a : b);
-    final page = index < detail.pages.length ? detail.pages[index] : detail.pages.first;
+    final index = selectedPages.isEmpty
+        ? 0
+        : selectedPages.reduce((a, b) => a < b ? a : b);
+    final page =
+        index < detail.pages.length ? detail.pages[index] : detail.pages.first;
     try {
       dash = await api.playUrl(
         btype: detail.btype,
@@ -329,7 +344,9 @@ class ParseController extends ChangeNotifier {
       );
       final available = availableQualities;
       if (available.isNotEmpty) {
-        quality = available.contains(settings.defaultQuality) ? settings.defaultQuality : available.first;
+        quality = available.contains(settings.defaultQuality)
+            ? settings.defaultQuality
+            : available.first;
       }
       qualityName = qualityLabel(quality);
       codec = settings.codecPreference;
@@ -338,7 +355,8 @@ class ParseController extends ChangeNotifier {
       error = null;
     } catch (exception) {
       dash = null;
-      error = exception is ApiException ? exception.message : exception.toString();
+      error =
+          exception is ApiException ? exception.message : exception.toString();
       AppLog.e('Parse', '获取清晰度失败', exception);
     }
     notifyListeners();
@@ -431,7 +449,8 @@ class ParseController extends ChangeNotifier {
   Future<void> loadMore() async {
     final current = batch;
     final kind = sourceKind;
-    if (current == null || kind == null || !current.hasMore || loadingMore) return;
+    if (current == null || kind == null || !current.hasMore || loadingMore)
+      return;
     loadingMore = true;
     notifyListeners();
     try {
@@ -439,7 +458,8 @@ class ParseController extends ChangeNotifier {
       BatchResult? next;
       switch (kind) {
         case LinkKind.favorites:
-          next = await api.favResources(mediaId: current.mediaId ?? 0, page: nextPage);
+          next = await api.favResources(
+              mediaId: current.mediaId ?? 0, page: nextPage);
           break;
         case LinkKind.space:
           next = await api.spaceArchives(mid: current.mid ?? 0, page: nextPage);
@@ -479,7 +499,8 @@ class ParseController extends ChangeNotifier {
     final detail = video;
     if (detail == null) return 0;
     final pages = detail.pages;
-    final indexes = selectedPages.isEmpty ? <int>[0] : (selectedPages.toList()..sort());
+    final indexes =
+        selectedPages.isEmpty ? <int>[0] : (selectedPages.toList()..sort());
     var count = 0;
     for (final index in indexes) {
       if (index < 0 || index >= pages.length) continue;
@@ -488,7 +509,8 @@ class ParseController extends ChangeNotifier {
         bvid: detail.bvid,
         cid: page.cid,
         aid: detail.aid,
-        title: pages.length > 1 ? '${detail.title} - ${page.part}' : detail.title,
+        title:
+            pages.length > 1 ? '${detail.title} - ${page.part}' : detail.title,
         cover: detail.cover,
         durationMs: page.durationMs,
         ownerName: detail.ownerName,

@@ -33,7 +33,8 @@ class NotificationService {
   /// 通知 id 偏移，避开 DownloadsService 占用的前台通知 10086
   static const int _notificationBase = 20000;
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
 
   bool _ready = false;
 

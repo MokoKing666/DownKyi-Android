@@ -129,11 +129,13 @@ class DownloadTask {
   bool get wantVideo => flags & DownloadFlags.video != 0;
   bool get wantAudio => flags & DownloadFlags.audio != 0;
   bool get wantCover => flags & DownloadFlags.cover != 0;
-  bool get wantDanmaku => flags & DownloadFlags.danmaku != 0 && danmakuFormat != DanmakuFormat.none;
+  bool get wantDanmaku =>
+      flags & DownloadFlags.danmaku != 0 && danmakuFormat != DanmakuFormat.none;
   bool get wantSubtitle => flags & DownloadFlags.subtitle != 0;
 
   bool get isFinished => status == TaskStatus.completed;
-  bool get isActive => status == TaskStatus.running || status == TaskStatus.merging;
+  bool get isActive =>
+      status == TaskStatus.running || status == TaskStatus.merging;
 
   double get progress {
     if (totalBytes <= 0) {

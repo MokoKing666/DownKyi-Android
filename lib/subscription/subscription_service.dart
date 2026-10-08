@@ -76,7 +76,8 @@ class SubscriptionService {
   /// 检查单个订阅
   Future<SubscriptionCheckResult> check(Subscription subscription) async {
     if (subscription.id == 0) {
-      return SubscriptionCheckResult(subscription: subscription, error: '订阅尚未入库');
+      return SubscriptionCheckResult(
+          subscription: subscription, error: '订阅尚未入库');
     }
     try {
       final fetched = await _fetch(subscription);
@@ -98,7 +99,9 @@ class SubscriptionService {
       final firstRun = seen.isEmpty;
 
       // 各入口的“最新一条”位置不同：番剧是整季列表，最新在末尾
-      final newest = subscription.kind == SubscriptionKind.bangumi ? items.last : items.first;
+      final newest = subscription.kind == SubscriptionKind.bangumi
+          ? items.last
+          : items.first;
       subscription.lastBvid =
           newest.bvid.isEmpty ? 'ep${newest.epId ?? 0}' : newest.bvid;
 
@@ -133,7 +136,8 @@ class SubscriptionService {
         await _notify(subscription, newItems);
       }
       await dao.update(subscription);
-      AppLog.d('Sub', '${subscription.title} 发现 ${newItems.length} 个新内容，入队 $queued');
+      AppLog.d(
+          'Sub', '${subscription.title} 发现 ${newItems.length} 个新内容，入队 $queued');
       return SubscriptionCheckResult(
         subscription: subscription,
         newItems: newItems,
@@ -144,7 +148,8 @@ class SubscriptionService {
       await dao.update(subscription);
       final message = error is ApiException ? error.message : '$error';
       AppLog.e('Sub', '检查订阅失败：${subscription.title}', error);
-      return SubscriptionCheckResult(subscription: subscription, error: message);
+      return SubscriptionCheckResult(
+          subscription: subscription, error: message);
     }
   }
 
@@ -153,18 +158,22 @@ class SubscriptionService {
   // ------------------------------------------------------------------
 
   /// 取第 1 页并顺带带回服务端的标题（用于给新订阅命名）
-  Future<({List<MediaItem> items, String title})> _fetch(Subscription subscription) async {
+  Future<({List<MediaItem> items, String title})> _fetch(
+      Subscription subscription) async {
     switch (subscription.kind) {
       case SubscriptionKind.space:
         final mid = int.tryParse(subscription.sourceId) ?? 0;
-        if (mid <= 0) throw ApiException(-1, 'UP 主 UID 无效：${subscription.sourceId}');
+        if (mid <= 0)
+          throw ApiException(-1, 'UP 主 UID 无效：${subscription.sourceId}');
         // order=pubdate 倒序，第 1 页第一条就是最新投稿
-        final result = await api.spaceArchives(mid: mid, page: 1, pageSize: pageSize);
+        final result =
+            await api.spaceArchives(mid: mid, page: 1, pageSize: pageSize);
         return (items: result.items, title: result.title);
 
       case SubscriptionKind.season:
         final parts = subscription.sourceId.split(':');
-        if (parts.length != 2) throw ApiException(-1, '合集标识无效：${subscription.sourceId}');
+        if (parts.length != 2)
+          throw ApiException(-1, '合集标识无效：${subscription.sourceId}');
         final mid = int.tryParse(parts[0]) ?? 0;
         final seasonId = int.tryParse(parts[1]) ?? 0;
         if (mid <= 0 || seasonId <= 0) {
@@ -182,19 +191,24 @@ class SubscriptionService {
 
       case SubscriptionKind.favorites:
         final mediaId = int.tryParse(subscription.sourceId) ?? 0;
-        if (mediaId <= 0) throw ApiException(-1, '收藏夹 id 无效：${subscription.sourceId}');
+        if (mediaId <= 0)
+          throw ApiException(-1, '收藏夹 id 无效：${subscription.sourceId}');
         // order=mtime 倒序，第 1 页第一条就是最新收藏
-        final result = await api.favResources(mediaId: mediaId, page: 1, pageSize: pageSize);
+        final result = await api.favResources(
+            mediaId: mediaId, page: 1, pageSize: pageSize);
         return (items: result.items, title: result.title);
 
       case SubscriptionKind.bangumi:
         final seasonId = int.tryParse(subscription.sourceId) ?? 0;
-        if (seasonId <= 0) throw ApiException(-1, '番剧 ssId 无效：${subscription.sourceId}');
+        if (seasonId <= 0)
+          throw ApiException(-1, '番剧 ssId 无效：${subscription.sourceId}');
         // 追番直接取整季剧集列表一次比对，比翻页可靠
-        final result = await api.seasonInfo(isCheese: false, seasonId: seasonId);
+        final result =
+            await api.seasonInfo(isCheese: false, seasonId: seasonId);
         return (
           items: result.items,
-          title: asString(result.season['title'], '番剧 ${subscription.sourceId}'),
+          title:
+              asString(result.season['title'], '番剧 ${subscription.sourceId}'),
         );
     }
   }
@@ -229,7 +243,8 @@ class SubscriptionService {
     );
   }
 
-  Future<int> _autoDownload(Subscription subscription, List<MediaItem> items) async {
+  Future<int> _autoDownload(
+      Subscription subscription, List<MediaItem> items) async {
     final downloader = manager;
     if (downloader == null) return 0;
     if (!subscription.wantAny) {
@@ -242,7 +257,8 @@ class SubscriptionService {
       final task = await downloader.enqueue(
         item: item,
         quality: subscription.quality,
-        qualityName: BiliConst.qualityNames[subscription.quality] ?? '${subscription.quality}',
+        qualityName: BiliConst.qualityNames[subscription.quality] ??
+            '${subscription.quality}',
         codec: subscription.codec,
         flags: subscription.flags,
       );

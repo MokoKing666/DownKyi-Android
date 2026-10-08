@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Dart / Flutter 依赖
+  # 注意：tdesign_flutter 被 pubspec_overrides.yaml 固定到 third_party 里的修补副本，
+  # 升级它需要同步改 tools/prepare_tdesign.ps1 的兼容处理，所以先不自动提 PR。
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    ignore:
+      - dependency-name: tdesign_flutter
+
+  # GitHub Actions 版本
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore(ci)'

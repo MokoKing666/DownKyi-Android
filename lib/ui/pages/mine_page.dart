@@ -23,7 +23,8 @@ class MinePage extends StatelessWidget {
     final settings = context.watch<SettingsStore>();
     final info = login.navInfo;
     final finished = manager.finishedTasks;
-    final totalBytes = finished.fold<int>(0, (sum, task) => sum + task.totalBytes);
+    final totalBytes =
+        finished.fold<int>(0, (sum, task) => sum + task.totalBytes);
 
     return Container(
       color: TdPalette.pageBackground,
@@ -33,7 +34,8 @@ class MinePage extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: TdSpacer.large),
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(TdSpacer.medium, TdSpacer.large, TdSpacer.medium, TdSpacer.xs),
+              padding: const EdgeInsets.fromLTRB(TdSpacer.medium,
+                  TdSpacer.large, TdSpacer.medium, TdSpacer.xs),
               child: Row(
                 children: <Widget>[
                   Expanded(child: Text('我的', style: TdText.titleLarge)),
@@ -52,7 +54,8 @@ class MinePage extends StatelessWidget {
                       child: (info?.face.isEmpty ?? true)
                           ? Container(
                               color: TdPalette.gray2,
-                              child: Icon(Icons.person, color: TdPalette.gray6, size: 30),
+                              child: Icon(Icons.person,
+                                  color: TdPalette.gray6, size: 30),
                             )
                           : Image.network(info!.face, fit: BoxFit.cover),
                     ),
@@ -62,7 +65,8 @@ class MinePage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(login.isLogin ? (info?.uname ?? '已登录') : '未登录', style: TdText.titleSmall),
+                        Text(login.isLogin ? (info?.uname ?? '已登录') : '未登录',
+                            style: TdText.titleSmall),
                         const SizedBox(height: 4),
                         Text(
                           login.isLogin
@@ -78,7 +82,8 @@ class MinePage extends StatelessWidget {
                     theme: TDButtonTheme.primary,
                     size: TDButtonSize.small,
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const LoginPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const LoginPage()),
                     ),
                   ),
                 ],
@@ -103,7 +108,8 @@ class MinePage extends StatelessWidget {
                   TDCell(
                     title: '默认清晰度',
                     leftIcon: Icons.high_quality_outlined,
-                    note: BiliConst.qualityNames[settings.defaultQuality] ?? '${settings.defaultQuality}',
+                    note: BiliConst.qualityNames[settings.defaultQuality] ??
+                        '${settings.defaultQuality}',
                   ),
                   TDCell(
                     title: '下载引擎',
@@ -122,7 +128,8 @@ class MinePage extends StatelessWidget {
                     leftIcon: Icons.settings_outlined,
                     arrow: true,
                     onClick: (cell) => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const SettingsPage()),
                     ),
                   ),
                   TDCell(
@@ -130,7 +137,8 @@ class MinePage extends StatelessWidget {
                     leftIcon: Icons.account_circle_outlined,
                     arrow: true,
                     onClick: (cell) => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const LoginPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const LoginPage()),
                     ),
                   ),
                   TDCell(
@@ -146,7 +154,8 @@ class MinePage extends StatelessWidget {
               padding: const EdgeInsets.all(TdSpacer.medium),
               child: Text(
                 AppInfo.disclaimer,
-                style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                style:
+                    TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
               ),
             ),
           ],
@@ -165,7 +174,8 @@ class MinePage extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('版本 v${AppInfo.version}（${AppInfo.englishName}）', style: TdText.bodySmall),
+            Text('版本 v${AppInfo.version}（${AppInfo.englishName}）',
+                style: TdText.bodySmall),
             const SizedBox(height: TdSpacer.xs),
             Text(
               '功能参考开源项目 DownKyi（哔哩下载姬）的跨平台版本，'
@@ -175,11 +185,15 @@ class MinePage extends StatelessWidget {
               style: TdText.bodySmall,
             ),
             const SizedBox(height: TdSpacer.small),
-            Text(AppInfo.disclaimer, style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder)),
+            Text(AppInfo.disclaimer,
+                style: TdText.bodySmall
+                    .copyWith(color: TdPalette.textPlaceholder)),
           ],
         ),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('知道了')),
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('知道了')),
         ],
       ),
     );
@@ -212,7 +226,8 @@ class _ThemeButton extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               style.label,
-              style: TextStyle(fontSize: 12, color: TdPalette.brand, height: 1.3),
+              style:
+                  TextStyle(fontSize: 12, color: TdPalette.brand, height: 1.3),
             ),
           ],
         ),

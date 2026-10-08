@@ -138,7 +138,8 @@ class Subscription {
   static Subscription fromMap(Map<String, Object?> map) {
     return Subscription(
       id: (map['id'] as int?) ?? 0,
-      kind: SubscriptionKind.fromName(map['kind'] as String?) ?? SubscriptionKind.space,
+      kind: SubscriptionKind.fromName(map['kind'] as String?) ??
+          SubscriptionKind.space,
       sourceId: (map['source_id'] as String?) ?? '',
       title: (map['title'] as String?) ?? '',
       cover: (map['cover'] as String?) ?? '',

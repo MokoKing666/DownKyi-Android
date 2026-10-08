@@ -6,6 +6,10 @@ analyzer:
   exclude:
     - build/**
     - android/**
+    # 由 tools/prepare_tdesign.ps1 生成的第三方源码副本。
+    # 不排除的话 flutter analyze 会把它自带的几百条 lint 一并报出来，
+    # CI 会因为第三方代码的 warning 直接失败。
+    - third_party/**
 
 linter:
   rules:

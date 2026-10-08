@@ -30,7 +30,8 @@ class MediaListPage extends StatelessWidget {
               children: <Widget>[
                 Container(
                   color: TdPalette.container,
-                  padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
                   child: Row(
                     children: <Widget>[
                       Expanded(
@@ -40,23 +41,28 @@ class MediaListPage extends StatelessWidget {
                         ),
                       ),
                       TDButton(
-                        text: parse.selectedCount == batch.items.length ? '全不选' : '全选',
+                        text: parse.selectedCount == batch.items.length
+                            ? '全不选'
+                            : '全选',
                         type: TDButtonType.text,
                         size: TDButtonSize.extraSmall,
                         theme: TDButtonTheme.primary,
-                        onTap: () => parse.selectAllBatch(parse.selectedCount != batch.items.length),
+                        onTap: () => parse.selectAllBatch(
+                            parse.selectedCount != batch.items.length),
                       ),
                     ],
                   ),
                 ),
                 Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
                     itemCount: batch.items.length + (batch.hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index >= batch.items.length) {
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: TdSpacer.medium),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: TdSpacer.medium),
                           child: Center(
                             child: parse.loadingMore
                                 ? const TdLoadingView(text: '加载更多')
@@ -82,7 +88,8 @@ class MediaListPage extends StatelessWidget {
                           size: TDCheckBoxSize.small,
                           insetSpacing: 0,
                           showDivider: false,
-                          onCheckBoxChanged: (checked) => parse.toggleBatchItem(item),
+                          onCheckBoxChanged: (checked) =>
+                              parse.toggleBatchItem(item),
                         ),
                         onTap: () => parse.toggleBatchItem(item),
                       );
@@ -95,14 +102,16 @@ class MediaListPage extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomBar(BuildContext context, ParseController parse, BatchResult batch) {
+  Widget _buildBottomBar(
+      BuildContext context, ParseController parse, BatchResult batch) {
     return Container(
       color: TdPalette.container,
       child: SafeArea(
         top: false,
         child: TdPrimaryAction(
           text: '下载选中（${parse.selectedCount}）',
-          onTap: parse.selectedCount == 0 ? null : () => _download(context, parse),
+          onTap:
+              parse.selectedCount == 0 ? null : () => _download(context, parse),
         ),
       ),
     );

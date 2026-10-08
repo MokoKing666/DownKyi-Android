@@ -63,7 +63,8 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
     return Container(
       decoration: BoxDecoration(
         color: TdPalette.container,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+        borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(TdRadius.extraLarge)),
       ),
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.88,
@@ -76,16 +77,21 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
             _buildHeader(),
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    if (widget.referenceLoaded) _buildReferenceNote() else _buildFailureNote(),
+                    if (widget.referenceLoaded)
+                      _buildReferenceNote()
+                    else
+                      _buildFailureNote(),
                     const SizedBox(height: TdSpacer.medium),
                     DownloadOptionsPanel(
                       parse: parse,
                       onChanged: () => setState(() {}),
-                      fallbackQualities: widget.referenceLoaded ? null : _genericQualities,
+                      fallbackQualities:
+                          widget.referenceLoaded ? null : _genericQualities,
                     ),
                     const SizedBox(height: TdSpacer.small),
                   ],
@@ -156,7 +162,8 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
     );
   }
 
-  Widget _note({required Color color, required String title, required String body}) {
+  Widget _note(
+      {required Color color, required String title, required String body}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(TdSpacer.small),
@@ -167,9 +174,11 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: TdText.bodySmall.copyWith(fontWeight: FontWeight.w500)),
+          Text(title,
+              style: TdText.bodySmall.copyWith(fontWeight: FontWeight.w500)),
           const SizedBox(height: 3),
-          Text(body, style: TdText.bodySmall.copyWith(color: TdPalette.textSecondary)),
+          Text(body,
+              style: TdText.bodySmall.copyWith(color: TdPalette.textSecondary)),
         ],
       ),
     );

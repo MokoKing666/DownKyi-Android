@@ -53,7 +53,8 @@ Future<void> main() async {
         ChangeNotifierProvider<LoginController>.value(value: login),
         ChangeNotifierProvider<DownloadManager>.value(value: manager),
         ChangeNotifierProvider<ParseController>.value(value: parse),
-        ChangeNotifierProvider<ShellController>(create: (_) => ShellController()),
+        ChangeNotifierProvider<ShellController>(
+            create: (_) => ShellController()),
       ],
       child: const DownKyiApp(),
     ),
@@ -79,7 +80,8 @@ Future<void> _catchUpSubscriptionCheck(
       manager: manager,
     );
     final results = await service.checkAll();
-    final found = results.fold<int>(0, (sum, item) => sum + item.newItems.length);
+    final found =
+        results.fold<int>(0, (sum, item) => sum + item.newItems.length);
     if (found > 0) AppLog.d('Sub', '前台补检查发现 $found 个新内容');
   } catch (error) {
     AppLog.e('Sub', '前台补检查失败', error);

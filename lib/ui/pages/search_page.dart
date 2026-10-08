@@ -152,7 +152,8 @@ class _SearchPageState extends State<SearchPage> {
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   hintText: '搜索视频 / UP 主投稿',
-                  hintStyle: TextStyle(color: TdPalette.textPlaceholder, fontSize: 14),
+                  hintStyle:
+                      TextStyle(color: TdPalette.textPlaceholder, fontSize: 14),
                 ),
               ),
             ),
@@ -206,7 +207,9 @@ class _SearchPageState extends State<SearchPage> {
         return VideoInfoTile(
           title: item.title,
           cover: item.cover,
-          subtitle: item.ownerName.isEmpty ? item.bvid : '${item.ownerName} · ${item.bvid}',
+          subtitle: item.ownerName.isEmpty
+              ? item.bvid
+              : '${item.ownerName} · ${item.bvid}',
           durationMs: item.durationMs,
           leading: TDCheckbox(
             checked: _selected.contains(item.bvid),
@@ -259,7 +262,8 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _downloadSelected() async {
-    final selected = _items.where((item) => _selected.contains(item.bvid)).toList();
+    final selected =
+        _items.where((item) => _selected.contains(item.bvid)).toList();
     if (selected.isEmpty) return;
     final parse = context.read<ParseController>();
     parse.setBatchDirectly(

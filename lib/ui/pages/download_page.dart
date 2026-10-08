@@ -22,7 +22,9 @@ class _DownloadPageState extends State<DownloadPage> {
   @override
   Widget build(BuildContext context) {
     final manager = context.watch<DownloadManager>();
-    final running = manager.tasks.where((task) => task.status != TaskStatus.completed).toList();
+    final running = manager.tasks
+        .where((task) => task.status != TaskStatus.completed)
+        .toList();
     final done = manager.finishedTasks;
     final list = _tab == 0 ? running : done;
 
@@ -33,7 +35,8 @@ class _DownloadPageState extends State<DownloadPage> {
         child: Column(
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(TdSpacer.medium, TdSpacer.large, TdSpacer.medium, 0),
+              padding: const EdgeInsets.fromLTRB(
+                  TdSpacer.medium, TdSpacer.large, TdSpacer.medium, 0),
               child: Row(
                 children: <Widget>[
                   Text('下载管理', style: TdText.titleLarge),
@@ -66,7 +69,10 @@ class _DownloadPageState extends State<DownloadPage> {
               ),
             ),
             TdSegmented(
-              labels: <String>['进行中 (${running.length})', '已完成 (${done.length})'],
+              labels: <String>[
+                '进行中 (${running.length})',
+                '已完成 (${done.length})'
+              ],
               index: _tab,
               onChanged: (index) => setState(() => _tab = index),
             ),
@@ -76,7 +82,8 @@ class _DownloadPageState extends State<DownloadPage> {
                       text: _tab == 0 ? '暂无下载任务\n去首页粘贴链接开始下载吧' : '还没有完成的任务',
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.only(top: TdSpacer.xxs, bottom: TdSpacer.large),
+                      padding: const EdgeInsets.only(
+                          top: TdSpacer.xxs, bottom: TdSpacer.large),
                       itemCount: list.length,
                       itemBuilder: (context, index) {
                         final task = list[index];
@@ -99,14 +106,16 @@ class _DownloadPageState extends State<DownloadPage> {
   }
 
   void _toggle(DownloadTask task, DownloadManager manager) {
-    if (task.status == TaskStatus.running || task.status == TaskStatus.merging) {
+    if (task.status == TaskStatus.running ||
+        task.status == TaskStatus.merging) {
       manager.pause(task.id);
     } else {
       manager.resume(task.id);
     }
   }
 
-  Future<void> _open(BuildContext context, DownloadManager manager, DownloadTask task) async {
+  Future<void> _open(
+      BuildContext context, DownloadManager manager, DownloadTask task) async {
     final ok = await manager.openFile(task);
     if (!context.mounted) return;
     if (!ok) {
@@ -114,7 +123,8 @@ class _DownloadPageState extends State<DownloadPage> {
     }
   }
 
-  Future<void> _export(BuildContext context, DownloadManager manager, DownloadTask task) async {
+  Future<void> _export(
+      BuildContext context, DownloadManager manager, DownloadTask task) async {
     tdLoadingShow(context, text: '导出中');
     final target = await manager.exportFile(task);
     tdLoadingHide();
@@ -126,7 +136,8 @@ class _DownloadPageState extends State<DownloadPage> {
     }
   }
 
-  Future<void> _delete(BuildContext context, DownloadManager manager, DownloadTask task) async {
+  Future<void> _delete(
+      BuildContext context, DownloadManager manager, DownloadTask task) async {
     final confirmed = await tdConfirm(
       context,
       title: '删除任务',
@@ -140,7 +151,8 @@ class _DownloadPageState extends State<DownloadPage> {
   }
 
   /// 清空已完成记录：先让用户选「只删记录」还是「连源文件一起删」
-  Future<void> _clearFinished(BuildContext context, DownloadManager manager) async {
+  Future<void> _clearFinished(
+      BuildContext context, DownloadManager manager) async {
     final count = manager.finishedTasks.length;
     if (count == 0) {
       tdToast(context, '还没有已完成的任务');
@@ -154,7 +166,8 @@ class _DownloadPageState extends State<DownloadPage> {
       builder: (sheetContext) => Container(
         decoration: BoxDecoration(
           color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+          borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(TdRadius.extraLarge)),
         ),
         child: SafeArea(
           top: false,

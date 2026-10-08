@@ -39,7 +39,8 @@ class ProtoReader {
   String readString() => utf8.decode(readBytes(), allowMalformed: true);
 
   int readFixed32() {
-    if (_position + 4 > _bytes.length) throw const FormatException('fixed32 越界');
+    if (_position + 4 > _bytes.length)
+      throw const FormatException('fixed32 越界');
     final value = _bytes[_position] |
         (_bytes[_position + 1] << 8) |
         (_bytes[_position + 2] << 16) |
@@ -49,7 +50,8 @@ class ProtoReader {
   }
 
   int readFixed64() {
-    if (_position + 8 > _bytes.length) throw const FormatException('fixed64 越界');
+    if (_position + 8 > _bytes.length)
+      throw const FormatException('fixed64 越界');
     var value = 0;
     for (var index = 7; index >= 0; index--) {
       value = (value << 8) | _bytes[_position + index];

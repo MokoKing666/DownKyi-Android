@@ -73,7 +73,8 @@ class DanmakuWriter {
     );
     buffer.writeln();
     buffer.writeln('[Events]');
-    buffer.writeln('Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text');
+    buffer.writeln(
+        'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text');
 
     final scrollLanes = List<int>.filled(_maxLane, 0);
     final topLanes = List<int>.filled(_maxLane, 0);
@@ -138,7 +139,8 @@ class DanmakuWriter {
     final red = (rgb >> 16) & 0xFF;
     final green = (rgb >> 8) & 0xFF;
     final blue = rgb & 0xFF;
-    String hex(int value) => value.toRadixString(16).padLeft(2, '0').toUpperCase();
+    String hex(int value) =>
+        value.toRadixString(16).padLeft(2, '0').toUpperCase();
     return '\\c&H${hex(blue)}${hex(green)}${hex(red)}&';
   }
 

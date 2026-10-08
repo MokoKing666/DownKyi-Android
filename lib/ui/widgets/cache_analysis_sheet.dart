@@ -49,8 +49,9 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
 
   bool _busy = false;
 
-  List<CacheGroup> get _removable =>
-      widget.groups.where((group) => group.fileCount > 0).toList(growable: false);
+  List<CacheGroup> get _removable => widget.groups
+      .where((group) => group.fileCount > 0)
+      .toList(growable: false);
 
   List<CacheGroup> get _kept =>
       widget.groups.where((group) => group.hasKept).toList(growable: false);
@@ -71,7 +72,8 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
     return Container(
       decoration: BoxDecoration(
         color: TdPalette.container,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+        borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(TdRadius.extraLarge)),
       ),
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.86,
@@ -84,7 +86,8 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
             _buildHeader(),
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -136,7 +139,8 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
   }
 
   Widget _buildSummary() {
-    final removable = widget.groups.fold<int>(0, (sum, group) => sum + group.bytes);
+    final removable =
+        widget.groups.fold<int>(0, (sum, group) => sum + group.bytes);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(TdSpacer.small),
@@ -174,7 +178,8 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      Expanded(child: Text(group.label, style: TdText.bodyMedium)),
+                      Expanded(
+                          child: Text(group.label, style: TdText.bodyMedium)),
                       Text(
                         '${group.fileCount} 个 · ${formatBytes(group.bytes)}',
                         style: TdText.bodyMedium,
@@ -203,14 +208,17 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    Expanded(child: Text(group.label, style: TdText.bodyMedium)),
-                    Text(formatBytes(group.keptBytes), style: TdText.bodyMedium),
+                    Expanded(
+                        child: Text(group.label, style: TdText.bodyMedium)),
+                    Text(formatBytes(group.keptBytes),
+                        style: TdText.bodyMedium),
                   ],
                 ),
                 Text(
                   '${group.keptCount} 个文件仍被任务引用'
                   '（未完成的分片、未导出的成品），删除会破坏断点续传或丢失文件',
-                  style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
                 ),
               ],
             ),

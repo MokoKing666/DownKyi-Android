@@ -93,7 +93,8 @@ class SettingsStore extends ChangeNotifier {
   /// 默认保存到系统相册
   bool get saveToGallery => saveLocation == SaveLocation.gallery;
 
-  bool get usesCustomDir => saveLocation == SaveLocation.custom && downloadDir.isNotEmpty;
+  bool get usesCustomDir =>
+      saveLocation == SaveLocation.custom && downloadDir.isNotEmpty;
 
   static const List<String> templates = <String>[
     '{title}',

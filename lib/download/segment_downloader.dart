@@ -39,7 +39,11 @@ enum DownloadErrorKind {
 }
 
 class _Part {
-  _Part({required this.index, required this.start, required this.end, required this.path});
+  _Part(
+      {required this.index,
+      required this.start,
+      required this.end,
+      required this.path});
 
   final int index;
   final int start;
@@ -83,6 +87,10 @@ class SegmentDownloader {
     this.referer,
     this.resumeState = '',
     this.refreshUrl,
+    this.readIdleTimeout = defaultReadIdleTimeout,
+    this.responseTimeout = defaultResponseTimeout,
+    this.maxAttempts = defaultMaxAttempts,
+    this.baseBackoff = defaultBaseBackoff,
   }) : _url = url;
 
   String _url;
@@ -98,12 +106,23 @@ class SegmentDownloader {
   final Future<String?> Function()? refreshUrl;
 
   /// 读空闲超时：连续这么久没有收到任何数据就断开重连
-  static const Duration readIdleTimeout = Duration(seconds: 30);
+  final Duration readIdleTimeout;
 
   /// 等待响应头的超时
-  static const Duration responseTimeout = Duration(seconds: 30);
+  final Duration responseTimeout;
 
-  static const int _maxAttempts = 8;
+  /// 单个分片的最大尝试次数
+  final int maxAttempts;
+
+  /// 指数退避的基准间隔（实际会叠加 0~500ms 抖动）
+  final Duration baseBackoff;
+
+  // 生产默认值。做成可注入是为了能单测「读空闲超时」与「重试耗尽」这两条路径——
+  // 默认参数下一次测试要跑一分多钟，不现实。
+  static const Duration defaultReadIdleTimeout = Duration(seconds: 30);
+  static const Duration defaultResponseTimeout = Duration(seconds: 30);
+  static const int defaultMaxAttempts = 8;
+  static const Duration defaultBaseBackoff = Duration(milliseconds: 500);
 
   final math.Random _random = math.Random();
 
@@ -119,7 +138,8 @@ class SegmentDownloader {
       403 || 404 || 410 => DownloadErrorKind.urlExpired,
       408 || 429 || 500 || 502 || 503 || 504 => DownloadErrorKind.retryable,
       416 => DownloadErrorKind.retryable,
-      _ => status >= 500 ? DownloadErrorKind.retryable : DownloadErrorKind.fatal,
+      _ =>
+        status >= 500 ? DownloadErrorKind.retryable : DownloadErrorKind.fatal,
     };
   }
 
@@ -129,7 +149,8 @@ class SegmentDownloader {
     required void Function(String state) onState,
     required CancelToken token,
   }) async {
-    final client = AppHttp.instance.createDownloadClient(maxConnectionsPerHost: concurrency + 2);
+    final client = AppHttp.instance
+        .createDownloadClient(maxConnectionsPerHost: concurrency + 2);
     final parts = <_Part>[];
     try {
       final probe = await _probe(client);
@@ -140,14 +161,16 @@ class SegmentDownloader {
         // 不支持分片：直接消费已有响应
         final written = await _consumeWhole(probe.pending!, onProgress, token);
         onTotal(written);
-        return SegmentResult(totalBytes: written, downloadedBytes: written, supportRange: false);
+        return SegmentResult(
+            totalBytes: written, downloadedBytes: written, supportRange: false);
       }
 
       onTotal(total);
       if (total <= 0) {
         final written = await _downloadSequential(client, onProgress, token);
         onTotal(written);
-        return SegmentResult(totalBytes: written, downloadedBytes: written, supportRange: false);
+        return SegmentResult(
+            totalBytes: written, downloadedBytes: written, supportRange: false);
       }
 
       final count = math.max(1, math.min(segmentCount, 16));
@@ -159,7 +182,8 @@ class SegmentDownloader {
         final start = index * chunk;
         if (start >= total) break;
         final end = math.min(total - 1, start + chunk - 1);
-        parts.add(_Part(index: index, start: start, end: end, path: _partPath(index)));
+        parts.add(_Part(
+            index: index, start: start, end: end, path: _partPath(index)));
       }
 
       if (resumeState != signature) {
@@ -204,7 +228,8 @@ class SegmentDownloader {
 
       // 拼接前会逐片校验，拼接后再核对总长；任何不一致都会抛错而不是「成功」
       await _concat(parts, filePath, total);
-      return SegmentResult(totalBytes: total, downloadedBytes: total, supportRange: true);
+      return SegmentResult(
+          totalBytes: total, downloadedBytes: total, supportRange: true);
     } finally {
       client.close(force: true);
     }
@@ -215,30 +240,48 @@ class SegmentDownloader {
   // ------------------------------------------------------------------
 
   Future<_Probe> _probe(HttpClient client) async {
-    final request = await AppHttp.instance.openRequest(
-      client,
-      _uri,
-      rangeStart: 0,
-      rangeEnd: 0,
-      referer: referer,
-    );
-    final response = await request.close().timeout(responseTimeout);
-    final status = response.statusCode;
-    final contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
-    if (status == 206) {
-      var total = 0;
-      if (contentRange != null && contentRange.contains('/')) {
-        total = int.tryParse(contentRange.split('/').last) ?? 0;
+    // 探测阶段同样要处理 URL 过期：播放地址在「解析出地址」到「真正开始下载」
+    // 之间就可能失效（尤其订阅的后台任务、用户点下载后又等了很久），
+    // 这里直接抛错的话刷新逻辑（写在 _downloadPart 里）永远走不到。
+    var refreshes = 0;
+    while (true) {
+      final request = await AppHttp.instance.openRequest(
+        client,
+        _uri,
+        rangeStart: 0,
+        rangeEnd: 0,
+        referer: referer,
+      );
+      final response = await request.close().timeout(responseTimeout);
+      final status = response.statusCode;
+
+      if (classifyStatus(status) == DownloadErrorKind.urlExpired &&
+          refreshes < 3) {
+        await response.drain<void>();
+        if (await _tryRefreshUrl()) {
+          refreshes++;
+          continue;
+        }
+        throw ApiException(status, 'HTTP $status', _url);
       }
-      await response.drain<void>();
-      return _Probe(totalBytes: total);
+
+      final contentRange =
+          response.headers.value(HttpHeaders.contentRangeHeader);
+      if (status == 206) {
+        var total = 0;
+        if (contentRange != null && contentRange.contains('/')) {
+          total = int.tryParse(contentRange.split('/').last) ?? 0;
+        }
+        await response.drain<void>();
+        return _Probe(totalBytes: total);
+      }
+      if (status != 200) {
+        await response.drain<void>();
+        throw ApiException(status, 'HTTP $status', _url);
+      }
+      // 不支持 Range：保留响应体，直接顺序下载
+      return _Probe(totalBytes: 0, pending: response);
     }
-    if (status != 200) {
-      await response.drain<void>();
-      throw ApiException(status, 'HTTP $status', _url);
-    }
-    // 不支持 Range：保留响应体，直接顺序下载
-    return _Probe(totalBytes: 0, pending: response);
   }
 
   Future<int> _consumeWhole(
@@ -277,11 +320,13 @@ class SegmentDownloader {
     void Function(int downloaded) onProgress,
     CancelToken token,
   ) async {
-    final request = await AppHttp.instance.openRequest(client, _uri, referer: referer);
+    final request =
+        await AppHttp.instance.openRequest(client, _uri, referer: referer);
     final response = await request.close().timeout(responseTimeout);
     if (response.statusCode != 200 && response.statusCode != 206) {
       await response.drain<void>();
-      throw ApiException(response.statusCode, 'HTTP ${response.statusCode}', _url);
+      throw ApiException(
+          response.statusCode, 'HTTP ${response.statusCode}', _url);
     }
     return _consumeWhole(response, onProgress, token);
   }
@@ -333,8 +378,9 @@ class SegmentDownloader {
         part.done = await _lengthOf(part.path);
         await _discardOversized(part);
         attempts++;
-        if (attempts >= _maxAttempts) {
-          throw ApiException(-1, '分片 ${part.index} 数据不足（${part.done}/${part.size}）', _url);
+        if (attempts >= maxAttempts) {
+          throw ApiException(
+              -1, '分片 ${part.index} 数据不足（${part.done}/${part.size}）', _url);
         }
         await Future<void>.delayed(_backoff(attempts));
       } catch (error) {
@@ -353,7 +399,9 @@ class SegmentDownloader {
         }
 
         // URL 过期：刷新地址后保留已下载分片继续
-        final kind = error is ApiException ? classifyStatus(error.code) : DownloadErrorKind.retryable;
+        final kind = error is ApiException
+            ? classifyStatus(error.code)
+            : DownloadErrorKind.retryable;
         if (kind == DownloadErrorKind.urlExpired && refreshes < 3) {
           final refreshed = await _tryRefreshUrl();
           if (refreshed) {
@@ -370,7 +418,7 @@ class SegmentDownloader {
 
         attempts++;
         AppLog.e('Download', '分片 ${part.index} 第 $attempts 次重试', error);
-        if (attempts >= _maxAttempts) rethrow;
+        if (attempts >= maxAttempts) throw _normalize(error, part);
         await Future<void>.delayed(_backoff(attempts));
         // 以磁盘实际长度为准，避免失败时账目偏移
         part.done = await _lengthOf(part.path);
@@ -388,11 +436,14 @@ class SegmentDownloader {
   ///   这一种情况可以接受，其余一律判为 Range 无效——否则完整文件会被
   ///   追加进 `.part`，拼出一个损坏的大文件；
   /// - 其它状态码交给错误分类处理。
-  void _validateRange(HttpClientResponse response, _Part part, int requestedStart) {
+  void _validateRange(
+      HttpClientResponse response, _Part part, int requestedStart) {
     final status = response.statusCode;
     if (status == 200) {
-      final isWholeFileSinglePart =
-          part.index == 0 && requestedStart == 0 && part.size == _total && _total > 0;
+      final isWholeFileSinglePart = part.index == 0 &&
+          requestedStart == 0 &&
+          part.size == _total &&
+          _total > 0;
       if (!isWholeFileSinglePart) {
         throw ApiException(
           200,
@@ -448,6 +499,23 @@ class SegmentDownloader {
     return (start: start, end: end, total: total);
   }
 
+  /// 把底层异常统一成带可读信息的 [ApiException]。
+  ///
+  /// `Stream.timeout` 抛的是裸 `TimeoutException`，直接冒泡到上层的话，
+  /// 用户在任务列表里看到的是 `TimeoutException after 0:00:00.4: No stream event`，
+  /// 既看不懂也不知道该做什么。文档明确要求这种情况提示「下载停滞，正在重新连接」。
+  ApiException _normalize(Object error, _Part part) {
+    if (error is ApiException) return error;
+    if (error is TimeoutException) {
+      return ApiException(
+        -3,
+        '分片 ${part.index} 下载停滞（${readIdleTimeout.inMilliseconds} 毫秒无数据），已断开重连',
+        _url,
+      );
+    }
+    return ApiException(-2, '分片 ${part.index} 下载失败：$error', _url);
+  }
+
   Future<void> _discardOversized(_Part part) async {
     if (part.done > part.size) {
       await _safeDelete(part.path);
@@ -455,11 +523,15 @@ class SegmentDownloader {
     }
   }
 
-  /// 指数退避 + 抖动，避免多分片同时重试打爆服务端
+  /// 指数退避 + 抖动，避免多分片同时重试打爆服务端。
+  ///
+  /// 抖动幅度跟随基准间隔缩放，这样把 baseBackoff 调小时整条退避链路
+  /// 跟着变快（测试用），而线上仍是「基准的 0~1 倍」随机抖动。
   Duration _backoff(int attempt) {
+    final step = math.max(1, baseBackoff.inMilliseconds);
     final exponent = math.min(attempt - 1, 6);
-    final base = math.min(30000, 500 * (1 << exponent));
-    return Duration(milliseconds: base + _random.nextInt(500));
+    final base = math.min(step * 64, step * (1 << exponent));
+    return Duration(milliseconds: base + _random.nextInt(step));
   }
 
   Future<bool> _tryRefreshUrl() {
@@ -491,7 +563,8 @@ class SegmentDownloader {
   ///
   /// 早先的实现对缺失分片直接 `continue`，于是 `part0 + part1 + part3` 也会被
   /// 当成成功文件交付。现在任何一片缺失或长度不符都会中止，拼接后再核对总长。
-  Future<void> _concat(List<_Part> parts, String outputPath, int expectedTotal) async {
+  Future<void> _concat(
+      List<_Part> parts, String outputPath, int expectedTotal) async {
     final broken = <String>[];
     for (final part in parts) {
       final file = File(part.path);

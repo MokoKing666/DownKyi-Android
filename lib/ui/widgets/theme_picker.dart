@@ -50,7 +50,8 @@ class _ThemePickerSheet extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: TdPalette.container,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+        borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(TdRadius.extraLarge)),
       ),
       child: SafeArea(
         top: false,
@@ -67,7 +68,8 @@ class _ThemePickerSheet extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
-                  Icon(Icons.palette_outlined, size: 20, color: TdPalette.brand),
+                  Icon(Icons.palette_outlined,
+                      size: 20, color: TdPalette.brand),
                   const SizedBox(width: TdSpacer.xs),
                   Text('主题颜色', style: TdText.titleSmall),
                 ],
@@ -77,7 +79,8 @@ class _ThemePickerSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
               child: Text(
                 '默认「简洁白」，强调色为哔哩哔哩粉；开启跟随系统后，系统切到深色会自动使用「主题黑」。',
-                style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                style:
+                    TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
               ),
             ),
             const SizedBox(height: TdSpacer.xs),
@@ -85,7 +88,8 @@ class _ThemePickerSheet extends StatelessWidget {
               _ThemeOption(
                 style: style,
                 selected: current == style,
-                onTap: () => Navigator.of(context).pop(ThemePickerResult(style: style)),
+                onTap: () =>
+                    Navigator.of(context).pop(ThemePickerResult(style: style)),
               ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
@@ -94,8 +98,8 @@ class _ThemePickerSheet extends StatelessWidget {
                 description: '系统切换深色时自动套用「主题黑」',
                 value: follow,
                 showDivider: false,
-                onChanged: (value) =>
-                    Navigator.of(context).pop(ThemePickerResult(followSystem: value)),
+                onChanged: (value) => Navigator.of(context)
+                    .pop(ThemePickerResult(followSystem: value)),
               ),
             ),
             const SizedBox(height: TdSpacer.xs),
@@ -107,7 +111,8 @@ class _ThemePickerSheet extends StatelessWidget {
 }
 
 class _ThemeOption extends StatelessWidget {
-  const _ThemeOption({required this.style, required this.selected, required this.onTap});
+  const _ThemeOption(
+      {required this.style, required this.selected, required this.onTap});
 
   final AppThemeStyle style;
   final bool selected;
@@ -118,7 +123,8 @@ class _ThemeOption extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
+        padding: const EdgeInsets.symmetric(
+            horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
         child: Row(
           children: <Widget>[
             ClipRRect(
@@ -128,7 +134,8 @@ class _ThemeOption extends StatelessWidget {
                 height: 46,
                 child: Row(
                   children: <Widget>[
-                    for (final color in style.preview) Expanded(child: ColoredBox(color: color)),
+                    for (final color in style.preview)
+                      Expanded(child: ColoredBox(color: color)),
                   ],
                 ),
               ),
@@ -144,7 +151,8 @@ class _ThemeOption extends StatelessWidget {
                 ],
               ),
             ),
-            if (selected) Icon(Icons.check_circle, color: TdPalette.brand, size: 22),
+            if (selected)
+              Icon(Icons.check_circle, color: TdPalette.brand, size: 22),
           ],
         ),
       ),

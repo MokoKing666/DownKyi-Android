@@ -56,18 +56,21 @@ LinkInfo parseLink(String input) {
   // 短链优先处理（需要网络跟随跳转）
   final short = _shortReg.firstMatch(text);
   if (short != null) {
-    return LinkInfo(LinkKind.shortLink, id: short.group(1), raw: text, page: pageIndex);
+    return LinkInfo(LinkKind.shortLink,
+        id: short.group(1), raw: text, page: pageIndex);
   }
 
   final isCheese = text.contains('/cheese/') || text.contains('pugv');
 
   final bv = _bvReg.firstMatch(text);
   if (bv != null) {
-    return LinkInfo(LinkKind.video, id: bv.group(0), raw: text, page: pageIndex);
+    return LinkInfo(LinkKind.video,
+        id: bv.group(0), raw: text, page: pageIndex);
   }
   final av = _avReg.firstMatch(text);
   if (av != null && !text.toLowerCase().contains('/cheese/')) {
-    return LinkInfo(LinkKind.video, id: 'av${av.group(1)}', raw: text, page: pageIndex);
+    return LinkInfo(LinkKind.video,
+        id: 'av${av.group(1)}', raw: text, page: pageIndex);
   }
 
   final ep = _epReg.firstMatch(text);
@@ -96,7 +99,8 @@ LinkInfo parseLink(String input) {
 
   final season = _seasonReg.firstMatch(text);
   if (season != null) {
-    return LinkInfo(LinkKind.season, id: '${season.group(1)}:${season.group(2)}', raw: text);
+    return LinkInfo(LinkKind.season,
+        id: '${season.group(1)}:${season.group(2)}', raw: text);
   }
 
   final space = _spaceReg.firstMatch(text);

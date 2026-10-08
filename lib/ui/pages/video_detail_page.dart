@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -36,7 +36,9 @@ class VideoDetailPage extends StatelessWidget {
                 const SizedBox(height: TdSpacer.xs),
                 TdPrimaryAction(
                   text: '开始下载（已选 ${parse.selectedCount} 项）',
-                  onTap: parse.selectedCount == 0 ? null : () => _download(context),
+                  onTap: parse.selectedCount == 0
+                      ? null
+                      : () => _download(context),
                 ),
               ],
             ),
@@ -51,13 +53,20 @@ class VideoDetailPage extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              VideoCover(url: video.cover, width: 130, height: 78, durationMs: video.durationMs),
+              VideoCover(
+                  url: video.cover,
+                  width: 130,
+                  height: 78,
+                  durationMs: video.durationMs),
               const SizedBox(width: TdSpacer.small),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(video.title, style: TdText.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(video.title,
+                        style: TdText.titleSmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
                     Text(
                       video.ownerName,
@@ -84,7 +93,8 @@ class VideoDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildPages(BuildContext context, ParseController parse, VideoDetail video) {
+  Widget _buildPages(
+      BuildContext context, ParseController parse, VideoDetail video) {
     return TdSection(
       title: '选集（共 ${video.pages.length} P）',
       child: Column(
@@ -98,11 +108,14 @@ class VideoDetailPage extends StatelessWidget {
                 ),
               ),
               TDButton(
-                text: parse.selectedPages.length == video.pages.length ? '全不选' : '全选',
+                text: parse.selectedPages.length == video.pages.length
+                    ? '全不选'
+                    : '全选',
                 type: TDButtonType.text,
                 size: TDButtonSize.extraSmall,
                 theme: TDButtonTheme.primary,
-                onTap: () => parse.selectAllPages(parse.selectedPages.length != video.pages.length),
+                onTap: () => parse.selectAllPages(
+                    parse.selectedPages.length != video.pages.length),
               ),
             ],
           ),
@@ -134,7 +147,9 @@ class VideoDetailPage extends StatelessWidget {
   Future<void> _download(BuildContext context) async {
     final parse = context.read<ParseController>();
     // 允许只下封面 / 弹幕 / 字幕：没有媒体流时下载管理器会跳过合并直接收尾
-    if (parse.wantVideo && parse.wantAudio && !parse.availableCodecs.contains(parse.codec)) {
+    if (parse.wantVideo &&
+        parse.wantAudio &&
+        !parse.availableCodecs.contains(parse.codec)) {
       tdToast(context, '当前清晰度不支持所选编码，已自动切换');
     }
     tdLoadingShow(context, text: '创建任务');

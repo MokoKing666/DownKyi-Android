@@ -65,7 +65,8 @@ class BiliApi {
       if (b3.isNotEmpty) http.setCookie('buvid3', b3);
       if (b4.isNotEmpty) http.setCookie('buvid4', b4);
       if (http.cookies['buvid4'] == null) {
-        http.setCookie('buvid4', '${DateTime.now().millisecondsSinceEpoch}-${b3.hashCode}');
+        http.setCookie('buvid4',
+            '${DateTime.now().millisecondsSinceEpoch}-${b3.hashCode}');
       }
     } catch (error) {
       AppLog.e('API', '获取 buvid 失败', error);
@@ -99,7 +100,8 @@ class BiliApi {
       host: BiliConst.passportBase,
     );
     final data = asMap(json['data']);
-    return QrLogin(url: asString(data['url']), key: asString(data['qrcode_key']));
+    return QrLogin(
+        url: asString(data['url']), key: asString(data['qrcode_key']));
   }
 
   Future<QrPollResult> qrPoll(String key) async {
@@ -122,7 +124,10 @@ class BiliApi {
     final uri = Uri.tryParse(callbackUrl);
     if (uri == null) return;
     uri.queryParameters.forEach((key, value) {
-      if (key == 'SESSDATA' || key == 'bili_jct' || key == 'DedeUserID' || key == 'DedeUserID__ckMd5') {
+      if (key == 'SESSDATA' ||
+          key == 'bili_jct' ||
+          key == 'DedeUserID' ||
+          key == 'DedeUserID__ckMd5') {
         http.setCookie(key, value);
       }
     });
@@ -137,16 +142,18 @@ class BiliApi {
     final query = <String, String>{
       if (isAv) 'aid': id.substring(2) else 'bvid': id,
     };
-    final data = asMap(await http.getData('/x/web-interface/view', query: query));
+    final data =
+        asMap(await http.getData('/x/web-interface/view', query: query));
     return VideoDetail.fromView(data);
   }
 
   /// 番剧 / 课程整季信息
-  Future<({
-    Map<String, dynamic> season,
-    List<MediaItem> items,
-    List<Map<String, dynamic>> rawEpisodes,
-  })> seasonInfo({
+  Future<
+      ({
+        Map<String, dynamic> season,
+        List<MediaItem> items,
+        List<Map<String, dynamic>> rawEpisodes,
+      })> seasonInfo({
     required bool isCheese,
     int? epId,
     int? seasonId,
@@ -161,7 +168,9 @@ class BiliApi {
     final rawEpisodes = asList(data['episodes'])
         .map((item) => asMap(item))
         .toList(growable: false);
-    final items = rawEpisodes.map((item) => _episodeToItem(item, btype)).toList(growable: false);
+    final items = rawEpisodes
+        .map((item) => _episodeToItem(item, btype))
+        .toList(growable: false);
     return (season: data, items: items, rawEpisodes: rawEpisodes);
   }
 
@@ -390,9 +399,8 @@ class BiliApi {
     void Function(int loaded, int total)? onProgress,
   }) async {
     final result = <DanmakuItem>[];
-    final maxSegment = durationMs > 0
-        ? (durationMs / (6 * 60 * 1000)).ceil() + 1
-        : 30;
+    final maxSegment =
+        durationMs > 0 ? (durationMs / (6 * 60 * 1000)).ceil() + 1 : 30;
     for (var index = 1; index <= maxSegment; index++) {
       try {
         final bytes = await http.getBytes(http.buildUri('/x/v2/dm/web/seg.so', {
@@ -489,7 +497,8 @@ class BiliApi {
     final data = asMap(await http.getData(
       '/x/web-interface/wbi/search/type',
       // 搜索要求 Referer 落在 .bilibili.com 下，这里带上真实的搜索页地址
-      referer: '${BiliConst.webBase}/search?keyword=${Uri.encodeComponent(keyword)}',
+      referer:
+          '${BiliConst.webBase}/search?keyword=${Uri.encodeComponent(keyword)}',
       query: await _sign({
         'search_type': 'video',
         'keyword': keyword,
@@ -633,7 +642,8 @@ class BiliApi {
     return items;
   }
 
-  Future<List<SeasonSummary>> seasons(int mid, {int page = 1, int pageSize = 20}) async {
+  Future<List<SeasonSummary>> seasons(int mid,
+      {int page = 1, int pageSize = 20}) async {
     final data = asMap(await http.getData(
       '/x/polymer/web-space/seasons_series_list',
       query: await _sign({
@@ -729,7 +739,8 @@ class BiliApi {
       'platform': 'web',
       'web_location': '1550101',
     });
-    final data = asMap(await http.getData('/x/space/wbi/arc/search', query: signed));
+    final data =
+        asMap(await http.getData('/x/space/wbi/arc/search', query: signed));
     final list = asMap(data['list']);
     final items = <MediaItem>[];
     for (final item in asList(list['vlist'])) {
@@ -755,7 +766,8 @@ class BiliApi {
   }
 
   Future<String> resolveShortLink(String url) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
       final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
       final request = await client.getUrl(uri);

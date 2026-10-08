@@ -34,7 +34,8 @@ class ToolboxPage extends StatelessWidget {
         child: Column(
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(TdSpacer.medium, TdSpacer.large, TdSpacer.medium, TdSpacer.xs),
+              padding: const EdgeInsets.fromLTRB(TdSpacer.medium,
+                  TdSpacer.large, TdSpacer.medium, TdSpacer.xs),
               child: Row(
                 children: <Widget>[
                   Expanded(child: Text('工具箱', style: TdText.titleLarge)),
@@ -64,20 +65,24 @@ class ToolboxPage extends StatelessWidget {
                         _ToolEntry(
                           icon: Icons.merge_type,
                           title: '重新合并音视频',
-                          description: '把保留的 video / audio 分片用 MediaMuxer 无损封装为 mp4',
-                          onTap: () => _pickTaskThen(context, title: '选择要重新合并的任务', action: _remux),
+                          description:
+                              '把保留的 video / audio 分片用 MediaMuxer 无损封装为 mp4',
+                          onTap: () => _pickTaskThen(context,
+                              title: '选择要重新合并的任务', action: _remux),
                         ),
                         _ToolEntry(
                           icon: Icons.subtitles_outlined,
                           title: '重新生成弹幕',
                           description: '重新拉取弹幕并生成 ASS / XML / TXT',
-                          onTap: () => _pickTaskThen(context, title: '选择要生成弹幕的任务', action: _rebuildDanmaku),
+                          onTap: () => _pickTaskThen(context,
+                              title: '选择要生成弹幕的任务', action: _rebuildDanmaku),
                         ),
                         _ToolEntry(
                           icon: Icons.save_alt,
                           title: '导出到相册 / 下载目录',
                           description: '视频进 Movies，其它文件统一进 Download',
-                          onTap: () => _pickTaskThen(context, title: '选择要导出的任务', action: _export),
+                          onTap: () => _pickTaskThen(context,
+                              title: '选择要导出的任务', action: _export),
                         ),
                         _ToolEntry(
                           icon: Icons.cleaning_services_outlined,
@@ -101,7 +106,8 @@ class ToolboxPage extends StatelessWidget {
                                   note: formatBytes(task.totalBytes),
                                   description: _statusOf(task),
                                   arrow: true,
-                                  onClick: (cell) => _showActions(context, manager, task),
+                                  onClick: (cell) =>
+                                      _showActions(context, manager, task),
                                 ),
                             ],
                           ),
@@ -129,14 +135,16 @@ class ToolboxPage extends StatelessWidget {
   Future<void> _pickTaskThen(
     BuildContext context, {
     required String title,
-    required Future<void> Function(BuildContext context, DownloadTask task) action,
+    required Future<void> Function(BuildContext context, DownloadTask task)
+        action,
   }) async {
     final task = await _pickTask(context, title: title);
     if (task == null || !context.mounted) return;
     await action(context, task);
   }
 
-  Future<DownloadTask?> _pickTask(BuildContext context, {required String title}) async {
+  Future<DownloadTask?> _pickTask(BuildContext context,
+      {required String title}) async {
     final tasks = context.read<DownloadManager>().finishedTasks;
     if (tasks.isEmpty) {
       tdToast(context, '还没有已完成的任务');
@@ -148,12 +156,14 @@ class ToolboxPage extends StatelessWidget {
       builder: (sheetContext) => Container(
         decoration: BoxDecoration(
           color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+          borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(TdRadius.extraLarge)),
         ),
         child: SafeArea(
           top: false,
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.72),
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.72),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +187,8 @@ class ToolboxPage extends StatelessWidget {
                           description: _statusOf(task),
                           note: formatBytes(task.totalBytes),
                           arrow: true,
-                          onClick: (cell) => Navigator.of(sheetContext).pop(task),
+                          onClick: (cell) =>
+                              Navigator.of(sheetContext).pop(task),
                         ),
                     ],
                   ),
@@ -200,7 +211,8 @@ class ToolboxPage extends StatelessWidget {
     final manager = context.read<DownloadManager>();
     final freed = await showCacheAnalysisSheet(context, manager);
     if (!context.mounted || freed == null) return;
-    tdToastSuccess(context, freed > 0 ? '已释放 ${formatBytes(freed)}' : '没有清理任何文件');
+    tdToastSuccess(
+        context, freed > 0 ? '已释放 ${formatBytes(freed)}' : '没有清理任何文件');
   }
 
   Future<void> _convertFromTask(BuildContext context) async {
@@ -223,7 +235,8 @@ class ToolboxPage extends StatelessWidget {
     final uri = await NativeBridge.pickFile();
     if (uri == null || uri.isEmpty) return;
     if (!context.mounted) return;
-    await _prepareAndConvert(context, source: uri, baseName: _displayNameOf(uri));
+    await _prepareAndConvert(context,
+        source: uri, baseName: _displayNameOf(uri));
   }
 
   /// 相册 / 外部文件是 content uri，FFmpeg 读不了，先落地成真实文件再转换
@@ -317,7 +330,8 @@ class ToolboxPage extends StatelessWidget {
 
       if (!result.success) {
         if (context.mounted) {
-          tdToastError(context, result.cancelled ? '已取消转换' : '转换失败：${result.message}');
+          tdToastError(
+              context, result.cancelled ? '已取消转换' : '转换失败：${result.message}');
         }
         return;
       }
@@ -366,12 +380,14 @@ class ToolboxPage extends StatelessWidget {
       builder: (sheetContext) => Container(
         decoration: BoxDecoration(
           color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+          borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(TdRadius.extraLarge)),
         ),
         child: SafeArea(
           top: false,
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.78),
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.78),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -387,15 +403,18 @@ class ToolboxPage extends StatelessWidget {
                       children: <Widget>[
                         Icon(Icons.transform, size: 20, color: TdPalette.brand),
                         const SizedBox(width: TdSpacer.xs),
-                        Expanded(child: Text('选择转换目标', style: TdText.titleSmall)),
+                        Expanded(
+                            child: Text('选择转换目标', style: TdText.titleSmall)),
                       ],
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
                     child: Text(
                       _describeSource(probe, baseName),
-                      style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                      style: TdText.bodySmall
+                          .copyWith(color: TdPalette.textPlaceholder),
                     ),
                   ),
                   const SizedBox(height: TdSpacer.xs),
@@ -483,14 +502,16 @@ class ToolboxPage extends StatelessWidget {
   // 单任务操作
   // ------------------------------------------------------------------
 
-  Future<void> _showActions(BuildContext context, DownloadManager manager, DownloadTask task) async {
+  Future<void> _showActions(
+      BuildContext context, DownloadManager manager, DownloadTask task) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
         decoration: BoxDecoration(
           color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+          borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(TdRadius.extraLarge)),
         ),
         padding: const EdgeInsets.symmetric(vertical: TdSpacer.small),
         child: SafeArea(
@@ -499,7 +520,8 @@ class ToolboxPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
                 child: Text(
                   task.title,
                   style: TdText.titleSmall,
@@ -529,7 +551,8 @@ class ToolboxPage extends StatelessWidget {
                     if (context.mounted) tdToast(context, '没有可转换的文件');
                     return;
                   }
-                  await _prepareAndConvert(context, source: source, baseName: task.fileName);
+                  await _prepareAndConvert(context,
+                      source: source, baseName: task.fileName);
                 },
               ),
               TDCell(
@@ -597,7 +620,9 @@ class ToolboxPage extends StatelessWidget {
     // 已导出到相册时 outputPath 是 content uri，不能作为 MediaMuxer 的输出
     final target = current.isEmpty || current.startsWith('content://')
         ? '$workDir/${task.fileName}.mp4'
-        : (current.endsWith('.mp4') || current.endsWith('.m4a') ? current : '$current.mp4');
+        : (current.endsWith('.mp4') || current.endsWith('.m4a')
+            ? current
+            : '$current.mp4');
 
     if (context.mounted) tdLoadingShow(context, text: '合并中');
     final ok = await NativeBridge.mux(
@@ -654,7 +679,8 @@ class ToolboxPage extends StatelessWidget {
       final api = context.read<BiliApi>();
       final manager = context.read<DownloadManager>();
       final settings = context.read<SettingsStore>();
-      final items = await api.danmaku(cid: task.cid, durationMs: task.durationMs);
+      final items =
+          await api.danmaku(cid: task.cid, durationMs: task.durationMs);
       // 用 if/else 而不是 switch 表达式：避免部分 Dart 版本对枚举常量模式判定为「非常量」
       var content = DanmakuWriter.toAss(items, title: task.title);
       if (task.danmakuFormat == DanmakuFormat.xml) {
@@ -762,7 +788,8 @@ class _ConvertDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: TdPalette.container,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TdRadius.extraLarge)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TdRadius.extraLarge)),
       child: Padding(
         padding: const EdgeInsets.all(TdSpacer.large),
         child: Column(
@@ -782,12 +809,15 @@ class _ConvertDialog extends StatelessWidget {
                       value: value <= 0 ? null : value.clamp(0.0, 1.0),
                       minHeight: 6,
                       backgroundColor: TdPalette.gray2,
-                      valueColor: AlwaysStoppedAnimation<Color>(TdPalette.brand),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(TdPalette.brand),
                     ),
                   ),
                   const SizedBox(height: TdSpacer.xs),
                   Text(
-                    value <= 0 ? '正在准备…' : '已完成 ${(value * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                    value <= 0
+                        ? '正在准备…'
+                        : '已完成 ${(value * 100).clamp(0, 100).toStringAsFixed(0)}%',
                     style: TdText.bodySmall,
                   ),
                 ],

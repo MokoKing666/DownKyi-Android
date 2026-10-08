@@ -56,7 +56,8 @@ class _ChoiceItem extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: width,
-        padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small, vertical: 7),
+        padding:
+            const EdgeInsets.symmetric(horizontal: TdSpacer.small, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? TdPalette.brandLight : TdPalette.gray1,
           borderRadius: BorderRadius.circular(TdRadius.medium),
@@ -96,7 +97,8 @@ class TdSegmented extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
+      margin: const EdgeInsets.symmetric(
+          horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: TdPalette.gray1,
@@ -111,7 +113,8 @@ class TdSegmented extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 7),
                   decoration: BoxDecoration(
-                    color: i == index ? TdPalette.container : Colors.transparent,
+                    color:
+                        i == index ? TdPalette.container : Colors.transparent,
                     borderRadius: BorderRadius.circular(TdRadius.small),
                     boxShadow: i == index
                         ? <BoxShadow>[
@@ -128,8 +131,11 @@ class TdSegmented extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
-                      color: i == index ? TdPalette.textPrimary : TdPalette.textSecondary,
-                      fontWeight: i == index ? FontWeight.w500 : FontWeight.w400,
+                      color: i == index
+                          ? TdPalette.textPrimary
+                          : TdPalette.textSecondary,
+                      fontWeight:
+                          i == index ? FontWeight.w500 : FontWeight.w400,
                     ),
                   ),
                 ),

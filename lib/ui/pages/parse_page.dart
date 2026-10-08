@@ -112,14 +112,16 @@ class _ParsePageState extends State<ParsePage> {
           padding: const EdgeInsets.only(bottom: TdSpacer.large),
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(TdSpacer.medium, TdSpacer.large, TdSpacer.medium, TdSpacer.small),
+              padding: const EdgeInsets.fromLTRB(TdSpacer.medium,
+                  TdSpacer.large, TdSpacer.medium, TdSpacer.small),
               child: Row(
                 children: <Widget>[
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(AppInfo.name, style: TdText.display.copyWith(fontSize: 26)),
+                        Text(AppInfo.name,
+                            style: TdText.display.copyWith(fontSize: 26)),
                         const SizedBox(height: 4),
                         Text(
                           '解析 B 站视频 / 番剧 / 收藏夹 / 合集，支持多线程下载与断点续传',
@@ -134,8 +136,11 @@ class _ParsePageState extends State<ParsePage> {
                     icon: Icon(Icons.search, color: TdPalette.textPrimary),
                   ),
                   TdLabel(login.isLogin ? '已登录' : '未登录',
-                      color: login.isLogin ? TdPalette.success : TdPalette.warning,
-                      background: login.isLogin ? TdPalette.successLight : TdPalette.warningLight),
+                      color:
+                          login.isLogin ? TdPalette.success : TdPalette.warning,
+                      background: login.isLogin
+                          ? TdPalette.successLight
+                          : TdPalette.warningLight),
                 ],
               ),
             ),
@@ -148,7 +153,8 @@ class _ParsePageState extends State<ParsePage> {
                       color: TdPalette.gray1,
                       borderRadius: BorderRadius.circular(TdRadius.medium),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: TdSpacer.small),
                     child: TextField(
                       controller: _controller,
                       maxLines: 4,
@@ -157,7 +163,8 @@ class _ParsePageState extends State<ParsePage> {
                       decoration: InputDecoration(
                         border: InputBorder.none,
                         hintText: '粘贴视频链接 / BV 号 / ep、ss 号 / 收藏夹 / 合集链接',
-                        hintStyle: TextStyle(color: TdPalette.textPlaceholder, fontSize: 14),
+                        hintStyle: TextStyle(
+                            color: TdPalette.textPlaceholder, fontSize: 14),
                       ),
                     ),
                   ),
@@ -199,7 +206,9 @@ class _ParsePageState extends State<ParsePage> {
                 builder: (context, constraints) {
                   const spacing = TdSpacer.small;
                   const columns = 2;
-                  final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                  final itemWidth =
+                      (constraints.maxWidth - spacing * (columns - 1)) /
+                          columns;
                   return Column(
                     children: <Widget>[
                       Wrap(
@@ -265,7 +274,8 @@ class _ParsePageState extends State<ParsePage> {
                     type: TDButtonType.text,
                     size: TDButtonSize.small,
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const LoginPage()),
+                      MaterialPageRoute<void>(
+                          builder: (_) => const LoginPage()),
                     ),
                   ),
                 ],
@@ -276,7 +286,8 @@ class _ParsePageState extends State<ParsePage> {
               padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
               child: Text(
                 AppInfo.disclaimer,
-                style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+                style:
+                    TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
               ),
             ),
           ],
@@ -307,7 +318,10 @@ class _ParsePageState extends State<ParsePage> {
             Icon(icon, size: 20, color: TdPalette.brand),
             const SizedBox(width: TdSpacer.xs),
             Expanded(
-              child: Text(title, style: TdText.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(title,
+                  style: TdText.bodyMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
             ),
             Icon(Icons.chevron_right, size: 16, color: TdPalette.gray6),
           ],
@@ -339,7 +353,8 @@ class _ParsePageState extends State<ParsePage> {
         builder: (sheetContext) => Container(
           decoration: BoxDecoration(
             color: TdPalette.container,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(TdRadius.extraLarge)),
+            borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(TdRadius.extraLarge)),
           ),
           padding: const EdgeInsets.all(TdSpacer.medium),
           child: Column(
@@ -357,7 +372,8 @@ class _ParsePageState extends State<ParsePage> {
                         title: folder.title,
                         note: '${folder.count} 个视频',
                         arrow: true,
-                        onClick: (cell) => Navigator.of(sheetContext).pop(folder),
+                        onClick: (cell) =>
+                            Navigator.of(sheetContext).pop(folder),
                       ),
                   ],
                 ),
@@ -367,7 +383,8 @@ class _ParsePageState extends State<ParsePage> {
         ),
       );
       if (selected == null) return;
-      await _openLink('https://www.bilibili.com/medialist/detail/ml${selected.id}?fid=${selected.id}');
+      await _openLink(
+          'https://www.bilibili.com/medialist/detail/ml${selected.id}?fid=${selected.id}');
     } catch (error) {
       tdLoadingHide();
       if (!mounted) return;
@@ -425,7 +442,8 @@ class _ParsePageState extends State<ParsePage> {
     );
     if (confirmed != true || !mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => SearchPage(initialKeyword: keyword)),
+      MaterialPageRoute<void>(
+          builder: (_) => SearchPage(initialKeyword: keyword)),
     );
   }
 
@@ -463,9 +481,12 @@ class _ParsePageState extends State<ParsePage> {
           decoration: const InputDecoration(hintText: '例如 2（可在空间地址里找到）'),
         ),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('取消')),
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消')),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
             child: const Text('确定'),
           ),
         ],

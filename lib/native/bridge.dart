@@ -6,7 +6,8 @@ import '../core/logger.dart';
 class NativeBridge {
   NativeBridge._();
 
-  static const MethodChannel _channel = MethodChannel('com.moko.downkyi/native');
+  static const MethodChannel _channel =
+      MethodChannel('com.moko.downkyi/native');
 
   /// MediaMuxer 重新封装：video / audio 允许只传其中一个（传 null 表示该轨不存在）
   static Future<bool> mux({
@@ -29,7 +30,8 @@ class NativeBridge {
 
   static Future<bool> openFile(String path, {String mime = 'video/mp4'}) async {
     try {
-      final result = await _channel.invokeMethod<bool>('openFile', <String, dynamic>{
+      final result =
+          await _channel.invokeMethod<bool>('openFile', <String, dynamic>{
         'path': path,
         'mime': mime,
       });
@@ -54,7 +56,8 @@ class NativeBridge {
     String category = 'file',
   }) async {
     try {
-      return await _channel.invokeMethod<String>('exportToPublic', <String, dynamic>{
+      return await _channel
+          .invokeMethod<String>('exportToPublic', <String, dynamic>{
         'path': path,
         'name': name,
         'mime': mime,
@@ -70,7 +73,8 @@ class NativeBridge {
   /// 删除本地文件或 MediaStore 条目（兼容 content:// ）
   static Future<bool> deletePath(String path) async {
     try {
-      final result = await _channel.invokeMethod<bool>('deletePath', <String, dynamic>{'path': path});
+      final result = await _channel
+          .invokeMethod<bool>('deletePath', <String, dynamic>{'path': path});
       return result ?? false;
     } catch (_) {
       return false;
@@ -96,7 +100,8 @@ class NativeBridge {
   }) async {
     if (!path.startsWith('content://')) return path;
     try {
-      final ok = await _channel.invokeMethod<bool>('copyToFile', <String, dynamic>{
+      final ok =
+          await _channel.invokeMethod<bool>('copyToFile', <String, dynamic>{
         'path': path,
         'dest': dest,
       });
@@ -109,7 +114,8 @@ class NativeBridge {
 
   static Future<int> fileSize(String path) async {
     try {
-      final result = await _channel.invokeMethod<int>('fileSize', <String, dynamic>{'path': path});
+      final result = await _channel
+          .invokeMethod<int>('fileSize', <String, dynamic>{'path': path});
       return result ?? 0;
     } catch (_) {
       return 0;
@@ -118,16 +124,19 @@ class NativeBridge {
 
   static Future<bool> deleteFile(String path) async {
     try {
-      final result = await _channel.invokeMethod<bool>('deleteFile', <String, dynamic>{'path': path});
+      final result = await _channel
+          .invokeMethod<bool>('deleteFile', <String, dynamic>{'path': path});
       return result ?? false;
     } catch (_) {
       return false;
     }
   }
 
-  static Future<bool> renameFile({required String from, required String to}) async {
+  static Future<bool> renameFile(
+      {required String from, required String to}) async {
     try {
-      final result = await _channel.invokeMethod<bool>('renameFile', <String, dynamic>{
+      final result =
+          await _channel.invokeMethod<bool>('renameFile', <String, dynamic>{
         'from': from,
         'to': to,
       });
@@ -139,7 +148,8 @@ class NativeBridge {
 
   static Future<String?> externalFilesDir([String sub = '']) async {
     try {
-      return await _channel.invokeMethod<String>('externalFilesDir', <String, dynamic>{'sub': sub});
+      return await _channel.invokeMethod<String>(
+          'externalFilesDir', <String, dynamic>{'sub': sub});
     } catch (_) {
       return null;
     }

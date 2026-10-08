@@ -61,7 +61,8 @@ Future<bool> runBackgroundSubscriptionCheck() async {
 class SubscriptionScheduler {
   SubscriptionScheduler._internal();
 
-  static final SubscriptionScheduler instance = SubscriptionScheduler._internal();
+  static final SubscriptionScheduler instance =
+      SubscriptionScheduler._internal();
 
   bool _initialized = false;
 
@@ -78,7 +79,8 @@ class SubscriptionScheduler {
   }
 
   /// 按设置应用周期任务；关闭时不注册
-  Future<void> apply({required bool enabled, required int intervalHours}) async {
+  Future<void> apply(
+      {required bool enabled, required int intervalHours}) async {
     await init();
     if (!_initialized) return;
     try {
@@ -109,7 +111,8 @@ class SubscriptionScheduler {
     await init();
     if (!_initialized) return false;
     try {
-      return await Workmanager().isScheduledByUniqueName(subscriptionUniqueName);
+      return await Workmanager()
+          .isScheduledByUniqueName(subscriptionUniqueName);
     } catch (_) {
       return false;
     }

@@ -6,7 +6,7 @@
     流程：
       1. 解析工具链（优先用已有环境变量，否则探测常见安装位置）
       2. flutter pub get
-      3. 修补 tdesign_flutter 的 IconData 兼容问题（每次 pub get 后都需要）
+      3. 准备修补过的 tdesign_flutter（tools/prepare_tdesign.ps1）
       4. flutter build apk --release --target-platform android-arm64
       5. 把产物复制为 DownKyi-v<版本>-arm64-v8a.apk 放到工程根目录
 
@@ -118,8 +118,15 @@ if (-not $SkipPubGet) {
     flutter pub get
 }
 
-Write-Host "`n=== 2/4 修补 tdesign_flutter 图标兼容性 ==="
-& (Join-Path $PSScriptRoot 'patch_tdesign_icons.ps1')
+Write-Host "`n=== 2/4 准备修补过的 tdesign_flutter ==="
+# 生成 third_party/tdesign_flutter 与 pubspec_overrides.yaml（pub 缓存不被改写）
+& (Join-Path $PSScriptRoot 'prepare_tdesign.ps1') -SkipPubGet
+if ($LASTEXITCODE -ne 0) {
+    Write-Error '准备 tdesign_flutter 失败'
+    exit 1
+}
+# override 发生变化时必须重新解析依赖
+flutter pub get
 
 Write-Host "`n=== 3/4 构建 arm64-v8a release APK ==="
 flutter build apk --release --target-platform android-arm64

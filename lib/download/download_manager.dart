@@ -33,7 +33,8 @@ class _Job {
 
   void recalc() {
     task.totalBytes = streamTotals.values.fold(0, (sum, value) => sum + value);
-    task.downloadedBytes = streamDone.values.fold(0, (sum, value) => sum + value);
+    task.downloadedBytes =
+        streamDone.values.fold(0, (sum, value) => sum + value);
   }
 }
 
@@ -66,8 +67,9 @@ class DownloadManager extends ChangeNotifier {
   String? get lastCompletedTitle => _lastCompletedTitle;
   int get completedCount => _completedCount;
 
-  List<DownloadTask> get activeTasks =>
-      tasks.where((task) => task.isActive || task.status == TaskStatus.queued).toList();
+  List<DownloadTask> get activeTasks => tasks
+      .where((task) => task.isActive || task.status == TaskStatus.queued)
+      .toList();
 
   List<DownloadTask> get finishedTasks =>
       tasks.where((task) => task.status == TaskStatus.completed).toList();
@@ -80,7 +82,8 @@ class DownloadManager extends ChangeNotifier {
     final key = '${settings.aria2RpcUrl}|${settings.aria2Secret}';
     if (_aria2Client == null || _aria2Key != key) {
       _aria2Client?.close();
-      _aria2Client = Aria2Client(rpcUrl: settings.aria2RpcUrl, secret: settings.aria2Secret);
+      _aria2Client = Aria2Client(
+          rpcUrl: settings.aria2RpcUrl, secret: settings.aria2Secret);
       _aria2Key = key;
     }
     return _aria2Client!;
@@ -90,22 +93,28 @@ class DownloadManager extends ChangeNotifier {
 
   /// aria2 是否跑在本机。只有本机运行的 aria2 才可能把文件交回 App 做后续处理。
   bool get aria2RunsLocally {
-    final host = Uri.tryParse(settings.aria2RpcUrl.trim())?.host.toLowerCase() ?? '';
-    return host == '127.0.0.1' || host == 'localhost' || host == '::1' || host == '10.0.2.2';
+    final host =
+        Uri.tryParse(settings.aria2RpcUrl.trim())?.host.toLowerCase() ?? '';
+    return host == '127.0.0.1' ||
+        host == 'localhost' ||
+        host == '::1' ||
+        host == '10.0.2.2';
   }
 
   Future<void> init() async {
     final loaded = await _dao.loadAll();
     for (final task in loaded) {
       // 上次退出时还在跑的任务，恢复为暂停
-      if (task.status == TaskStatus.running || task.status == TaskStatus.merging) {
+      if (task.status == TaskStatus.running ||
+          task.status == TaskStatus.merging) {
         task.status = TaskStatus.paused;
         task.speed = 0;
         await _dao.update(task);
       }
       tasks.add(task);
     }
-    _completedCount = tasks.where((task) => task.status == TaskStatus.completed).length;
+    _completedCount =
+        tasks.where((task) => task.status == TaskStatus.completed).length;
     notifyListeners();
   }
 
@@ -144,7 +153,8 @@ class DownloadManager extends ChangeNotifier {
       danmakuFormat: effectiveDanmaku,
       subtitleLanguage: subtitleLanguagePreference,
     );
-    if (tasks.any((task) => task.key == key && task.status != TaskStatus.failed)) {
+    if (tasks
+        .any((task) => task.key == key && task.status != TaskStatus.failed)) {
       AppLog.d('Task', '任务已存在，跳过：$key');
       return null;
     }
@@ -213,7 +223,8 @@ class DownloadManager extends ChangeNotifier {
   String buildFileName(DownloadTask task) {
     var name = settings.fileNameTemplate
         .replaceAll('{title}', task.title)
-        .replaceAll('{quality}', task.qualityName.isEmpty ? '${task.quality}' : task.qualityName)
+        .replaceAll('{quality}',
+            task.qualityName.isEmpty ? '${task.quality}' : task.qualityName)
         .replaceAll('{owner}', task.owner)
         .replaceAll('{bvid}', task.bvid)
         .replaceAll('{cid}', '${task.cid}')
@@ -232,12 +243,7 @@ class DownloadManager extends ChangeNotifier {
       for (final task in tasks)
         if (task.fileName.isNotEmpty) task.fileName,
     };
-    if (!taken.contains(base)) return base;
-    for (var index = 1; index < 1000; index++) {
-      final candidate = '$base ($index)';
-      if (!taken.contains(candidate)) return candidate;
-    }
-    return '$base (${DateTime.now().millisecondsSinceEpoch})';
+    return dedupeFileName(base, taken);
   }
 
   static String _formatDate(int milliseconds) {
@@ -290,7 +296,8 @@ class DownloadManager extends ChangeNotifier {
 
   void resumeAll() {
     for (final task in tasks) {
-      if (task.status == TaskStatus.paused || task.status == TaskStatus.failed) {
+      if (task.status == TaskStatus.paused ||
+          task.status == TaskStatus.failed) {
         task.status = TaskStatus.queued;
         task.error = null;
         unawaited(_dao.update(task));
@@ -321,7 +328,8 @@ class DownloadManager extends ChangeNotifier {
   }
 
   Future<void> clearFinished({bool deleteFiles = false}) async {
-    final finished = tasks.where((task) => task.status == TaskStatus.completed).toList();
+    final finished =
+        tasks.where((task) => task.status == TaskStatus.completed).toList();
     for (final task in finished) {
       if (deleteFiles) await _deleteTaskFiles(task);
       tasks.removeWhere((item) => item.id == task.id);
@@ -437,7 +445,8 @@ class DownloadManager extends ChangeNotifier {
       final video = dash.pickVideo(task.quality, task.codec);
       final audio = dash.pickAudio(task.audioId);
 
-      if ((video == null && audio == null) || (task.wantVideo && video == null)) {
+      if ((video == null && audio == null) ||
+          (task.wantVideo && video == null)) {
         // 回退到 durl 直链（部分老视频没有 DASH）
         await _downloadDirect(task, job, dir, tmpDir.path);
         return;
@@ -638,7 +647,8 @@ class DownloadManager extends ChangeNotifier {
         if (status.isComplete) {
           pending.remove(entry.key);
         } else if (status.isError) {
-          throw ApiException(-1, 'Aria2 下载失败（${entry.key}）：${status.errorMessage}');
+          throw ApiException(
+              -1, 'Aria2 下载失败（${entry.key}）：${status.errorMessage}');
         }
       }
       _persistProgress(job);
@@ -767,10 +777,14 @@ class DownloadManager extends ChangeNotifier {
 
     if (task.wantCover && task.cover.isNotEmpty) {
       try {
-        final bytes = await api.http.getBytes(Uri.parse(task.cover), referer: BiliConst.webBase);
+        final bytes = await api.http
+            .getBytes(Uri.parse(task.cover), referer: BiliConst.webBase);
         final local = '$base.jpg';
         await File(local).writeAsBytes(bytes, flush: true);
-        await _placeFile(localPath: local, fileName: '${task.fileName}.jpg', toGallery: toGallery);
+        await _placeFile(
+            localPath: local,
+            fileName: '${task.fileName}.jpg',
+            toGallery: toGallery);
       } catch (error) {
         AppLog.e('Task', '封面下载失败', error);
         failed.add('封面');
@@ -779,7 +793,8 @@ class DownloadManager extends ChangeNotifier {
 
     if (task.wantDanmaku) {
       try {
-        final items = await api.danmaku(cid: task.cid, durationMs: task.durationMs);
+        final items =
+            await api.danmaku(cid: task.cid, durationMs: task.durationMs);
         final content = switch (task.danmakuFormat) {
           DanmakuFormat.xml => DanmakuWriter.toXml(items),
           DanmakuFormat.ass => DanmakuWriter.toAss(items, title: task.title),
@@ -803,7 +818,8 @@ class DownloadManager extends ChangeNotifier {
 
     if (task.wantSubtitle) {
       try {
-        final subtitles = await api.subtitles(cid: task.cid, bvid: task.bvid, epId: task.epId);
+        final subtitles = await api.subtitles(
+            cid: task.cid, bvid: task.bvid, epId: task.epId);
         if (subtitles.isNotEmpty) {
           final chosen = subtitles.firstWhere(
             (item) => item.lan.toLowerCase().contains('zh'),
@@ -813,7 +829,10 @@ class DownloadManager extends ChangeNotifier {
           if (srt.isNotEmpty) {
             final local = '$base.srt';
             await File(local).writeAsString(srt, flush: true);
-            await _placeFile(localPath: local, fileName: '${task.fileName}.srt', toGallery: toGallery);
+            await _placeFile(
+                localPath: local,
+                fileName: '${task.fileName}.srt',
+                toGallery: toGallery);
           }
         }
       } catch (error) {
@@ -836,7 +855,8 @@ class DownloadManager extends ChangeNotifier {
 
     // durl 直链下载到的本身就是完整 mp4（音视频在同一个文件里），改名即可。
     // 之前这里还会再封装一遍，而封装逻辑只取第一条视频轨，音频会被静默丢掉。
-    final isCompleteMp4 = audioPath == null && videoPath != null && videoPath.endsWith('.mp4');
+    final isCompleteMp4 =
+        audioPath == null && videoPath != null && videoPath.endsWith('.mp4');
 
     var ok = true;
     if (isCompleteMp4) {
@@ -844,12 +864,14 @@ class DownloadManager extends ChangeNotifier {
         await File(videoPath).rename(output);
       } catch (error) {
         AppLog.e('Task', '移动直链文件失败，改为重新封装', error);
-        ok = await NativeBridge.mux(video: videoPath, audio: null, output: output);
+        ok = await NativeBridge.mux(
+            video: videoPath, audio: null, output: output);
       }
     } else {
       // 音频要无条件传进去：只有音频没有视频时也必须输出 m4a，
       // 不能因为「缺少视频轨」就把音频丢掉导致封装必然失败
-      ok = await NativeBridge.mux(video: videoPath, audio: audioPath, output: output);
+      ok = await NativeBridge.mux(
+          video: videoPath, audio: audioPath, output: output);
     }
 
     if (ok) {
@@ -955,21 +977,26 @@ class DownloadManager extends ChangeNotifier {
           task.outputPath,
           task.exportedPath,
         ]) {
-          if (path != null && path.isNotEmpty && !path.startsWith('content://')) {
+          if (path != null &&
+              path.isNotEmpty &&
+              !path.startsWith('content://')) {
             usedPaths.add(path);
           }
         }
-        if (task.status != TaskStatus.completed && task.status != TaskStatus.failed) {
+        if (task.status != TaskStatus.completed &&
+            task.status != TaskStatus.failed) {
           activePrefixes.add('${task.key}_v.m4s');
           activePrefixes.add('${task.key}_a.m4s');
         }
       }
 
-      await for (final entity in root.list(recursive: true, followLinks: false)) {
+      await for (final entity
+          in root.list(recursive: true, followLinks: false)) {
         if (entity is! File) continue;
         final name = entity.uri.pathSegments.last;
         final builder = groups[_cacheCategoryOf(name)] ?? groups['other']!;
-        final kept = usedPaths.contains(entity.path) || activePrefixes.any(name.startsWith);
+        final kept = usedPaths.contains(entity.path) ||
+            activePrefixes.any(name.startsWith);
         int size = 0;
         try {
           size = await entity.length();
@@ -1074,7 +1101,9 @@ class DownloadManager extends ChangeNotifier {
       case SaveLocation.appDir:
         return await ensureDownloadDir();
       case SaveLocation.custom:
-        return settings.downloadDir.isEmpty ? '未设置（将回退到应用目录）' : settings.downloadDir;
+        return settings.downloadDir.isEmpty
+            ? '未设置（将回退到应用目录）'
+            : settings.downloadDir;
     }
   }
 
@@ -1215,7 +1244,8 @@ class DownloadManager extends ChangeNotifier {
   Future<void> _startServiceIfNeeded() async {
     if (_serviceRunning) return;
     _serviceRunning = true;
-    await NativeBridge.startService(title: AppInfo.name, text: '准备下载…', progress: -1);
+    await NativeBridge.startService(
+        title: AppInfo.name, text: '准备下载…', progress: -1);
   }
 
   Future<void> _stopServiceIfIdle() async {
@@ -1231,11 +1261,13 @@ class DownloadManager extends ChangeNotifier {
     if (active.isEmpty) return;
     final total = active.fold<int>(0, (sum, task) => sum + task.totalBytes);
     final done = active.fold<int>(0, (sum, task) => sum + task.downloadedBytes);
-    final progress = total > 0 ? ((done / total) * 100).round().clamp(0, 100) : -1;
+    final progress =
+        total > 0 ? ((done / total) * 100).round().clamp(0, 100) : -1;
     final text = active.length == 1
         ? '${formatBytes(done)} / ${formatBytes(total)} · ${formatSpeed(active.first.speed)}'
         : '共 ${active.length} 个任务 · ${formatBytes(done)} / ${formatBytes(total)}';
-    await NativeBridge.updateService(title: AppInfo.name, text: text, progress: progress);
+    await NativeBridge.updateService(
+        title: AppInfo.name, text: text, progress: progress);
   }
 
   @override
@@ -1246,6 +1278,19 @@ class DownloadManager extends ChangeNotifier {
     _aria2Client = null;
     super.dispose();
   }
+}
+
+/// 文件名查重：命中 [taken] 时追加 `(1)`、`(2)`……
+///
+/// 抽成纯函数是为了能单测——批量下载同名标题会写进同一个文件互相覆盖，
+/// 这是「下完了但文件被顶掉」的典型来源。
+String dedupeFileName(String base, Set<String> taken) {
+  if (!taken.contains(base)) return base;
+  for (var index = 1; index < 1000; index++) {
+    final candidate = '$base ($index)';
+    if (!taken.contains(candidate)) return candidate;
+  }
+  return '$base (${DateTime.now().millisecondsSinceEpoch})';
 }
 
 /// 缓存分析的分组定义（数组顺序即界面展示顺序）

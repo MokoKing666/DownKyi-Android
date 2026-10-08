@@ -34,7 +34,8 @@ class VideoCover extends StatelessWidget {
                 url,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => Center(
-                  child: Icon(Icons.broken_image_outlined, color: TdPalette.gray6),
+                  child:
+                      Icon(Icons.broken_image_outlined, color: TdPalette.gray6),
                 ),
                 loadingBuilder: (context, child, progress) {
                   if (progress == null) return child;
@@ -42,7 +43,8 @@ class VideoCover extends StatelessWidget {
                     child: SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: TdPalette.brand),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: TdPalette.brand),
                     ),
                   );
                 },
@@ -52,7 +54,8 @@ class VideoCover extends StatelessWidget {
                 right: 4,
                 bottom: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(TdRadius.small),

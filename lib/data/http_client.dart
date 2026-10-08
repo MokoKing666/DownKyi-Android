@@ -62,7 +62,9 @@ class AppHttp {
   void clearCookies() => _cookies.clear();
 
   Uri buildUri(String path, [Map<String, String>? query]) {
-    final base = path.startsWith('http') ? Uri.parse(path) : Uri.parse('${BiliConst.apiBase}$path');
+    final base = path.startsWith('http')
+        ? Uri.parse(path)
+        : Uri.parse('${BiliConst.apiBase}$path');
     if (query == null || query.isEmpty) return base;
     return base.replace(queryParameters: <String, String>{
       ...base.queryParameters,
@@ -113,7 +115,8 @@ class AppHttp {
     String? referer,
     String host = BiliConst.apiBase,
   }) async {
-    final json = await getJson(path, query: query, referer: referer, host: host);
+    final json =
+        await getJson(path, query: query, referer: referer, host: host);
     return json['data'];
   }
 
@@ -121,7 +124,8 @@ class AppHttp {
     final response = await _open(uri, referer: referer);
     final body = await utf8.decoder.bind(response).join();
     if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, 'HTTP ${response.statusCode}', uri.toString());
+      throw ApiException(
+          response.statusCode, 'HTTP ${response.statusCode}', uri.toString());
     }
     return body;
   }
@@ -129,7 +133,8 @@ class AppHttp {
   Future<List<int>> getBytes(Uri uri, {String? referer}) async {
     final response = await _open(uri, referer: referer);
     if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, 'HTTP ${response.statusCode}', uri.toString());
+      throw ApiException(
+          response.statusCode, 'HTTP ${response.statusCode}', uri.toString());
     }
     final builder = BytesBuilder(copy: false);
     await for (final chunk in response) {
@@ -141,7 +146,8 @@ class AppHttp {
   Future<HttpClientResponse> _open(Uri uri, {String? referer}) async {
     try {
       final request = await _client.getUrl(uri);
-      headers(referer: referer).forEach((key, value) => request.headers.set(key, value));
+      headers(referer: referer)
+          .forEach((key, value) => request.headers.set(key, value));
       final response = await request.close();
       for (final cookie in response.cookies) {
         _cookies[cookie.name] = cookie.value;

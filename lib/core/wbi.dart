@@ -8,10 +8,70 @@ import 'package:crypto/crypto.dart';
 /// 请求参数加上 wts 并按 key 排序拼成 query，最后 `w_rid = md5(query + mixinKey)`。
 class WbiSigner {
   static const List<int> _mixinKeyEncTab = [
-    46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
-    27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13,
-    37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4,
-    22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
+    46,
+    47,
+    18,
+    2,
+    53,
+    8,
+    23,
+    32,
+    15,
+    50,
+    10,
+    31,
+    58,
+    3,
+    45,
+    35,
+    27,
+    43,
+    5,
+    49,
+    33,
+    9,
+    42,
+    19,
+    29,
+    28,
+    14,
+    39,
+    12,
+    38,
+    41,
+    13,
+    37,
+    48,
+    7,
+    16,
+    24,
+    55,
+    40,
+    61,
+    26,
+    17,
+    0,
+    1,
+    60,
+    51,
+    30,
+    4,
+    22,
+    25,
+    54,
+    21,
+    56,
+    59,
+    6,
+    63,
+    57,
+    62,
+    11,
+    36,
+    20,
+    34,
+    44,
+    52,
   ];
 
   String? _imgKey;
@@ -52,9 +112,12 @@ class WbiSigner {
   }
 
   /// 返回带 wts / w_rid 的完整参数
-  Map<String, String> sign(Map<String, String> params) {
+  ///
+  /// [wts] 只用于测试注入固定时间戳，正式调用留空取当前秒级时间。
+  Map<String, String> sign(Map<String, String> params, {int? wts}) {
     final signed = Map<String, String>.from(params);
-    signed['wts'] = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
+    signed['wts'] =
+        (wts ?? DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
     final key = _mixinKey;
     if (key == null) return signed;
 

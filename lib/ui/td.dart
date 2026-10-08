@@ -81,17 +81,17 @@ class TdSpacer {
 class TdText {
   const TdText._();
 
-  static TextStyle get display =>
-      TextStyle(fontSize: 32, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
+  static TextStyle get display => TextStyle(
+      fontSize: 32, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
 
-  static TextStyle get titleLarge =>
-      TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
+  static TextStyle get titleLarge => TextStyle(
+      fontSize: 20, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
 
-  static TextStyle get titleMedium =>
-      TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
+  static TextStyle get titleMedium => TextStyle(
+      fontSize: 18, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
 
-  static TextStyle get titleSmall =>
-      TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
+  static TextStyle get titleSmall => TextStyle(
+      fontSize: 16, fontWeight: FontWeight.w600, color: TdPalette.textPrimary);
 
   static TextStyle get bodyLarge =>
       TextStyle(fontSize: 16, color: TdPalette.textPrimary, height: 1.5);
@@ -139,10 +139,13 @@ class TdPage extends StatelessWidget {
                     titleColor: TdPalette.textPrimary,
                     backgroundColor: TdPalette.navBackground,
                     useDefaultBack: showBack,
-                    onBack: showBack ? () => Navigator.of(context).maybePop() : null,
+                    onBack: showBack
+                        ? () => Navigator.of(context).maybePop()
+                        : null,
                     rightBarItems: actions,
                   ),
-                  if (showDivider) TDDivider(height: 0.5, color: TdPalette.divider),
+                  if (showDivider)
+                    TDDivider(height: 0.5, color: TdPalette.divider),
                 ],
               ),
             ),
@@ -300,7 +303,8 @@ class TdLabel extends StatelessWidget {
         color: background ?? TdPalette.brandLight,
         borderRadius: BorderRadius.circular(TdRadius.small),
       ),
-      child: Text(text, style: TextStyle(fontSize: 11, color: foreground, height: 1.3)),
+      child: Text(text,
+          style: TextStyle(fontSize: 11, color: foreground, height: 1.3)),
     );
   }
 }
@@ -323,7 +327,8 @@ class TdPrimaryAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium, vertical: TdSpacer.small),
+      padding: const EdgeInsets.symmetric(
+          horizontal: TdSpacer.medium, vertical: TdSpacer.small),
       child: TDButton(
         text: loading ? '处理中…' : text,
         size: TDButtonSize.large,
@@ -338,7 +343,8 @@ class TdPrimaryAction extends StatelessWidget {
 
 /// 空状态
 class TdEmptyView extends StatelessWidget {
-  const TdEmptyView({super.key, required this.text, this.operationText, this.onTap});
+  const TdEmptyView(
+      {super.key, required this.text, this.operationText, this.onTap});
 
   final String text;
   final String? operationText;
@@ -368,7 +374,8 @@ class TdLoadingView extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(TdSpacer.large),
-        child: TDLoading(size: TDLoadingSize.large, icon: TDLoadingIcon.circle, text: text),
+        child: TDLoading(
+            size: TDLoadingSize.large, icon: TDLoadingIcon.circle, text: text),
       ),
     );
   }
@@ -388,7 +395,8 @@ Future<bool> tdConfirm(
     builder: (dialogContext) => Dialog(
       backgroundColor: TdPalette.container,
       insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TdRadius.extraLarge)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TdRadius.extraLarge)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 28, 24, 10),
         child: Column(
@@ -399,7 +407,8 @@ Future<bool> tdConfirm(
               const SizedBox(height: TdSpacer.small),
               Text(
                 content,
-                style: TdText.bodyMedium.copyWith(color: TdPalette.textSecondary),
+                style:
+                    TdText.bodyMedium.copyWith(color: TdPalette.textSecondary),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -419,7 +428,8 @@ Future<bool> tdConfirm(
                 Expanded(
                   child: TDButton(
                     text: confirmText,
-                    theme: danger ? TDButtonTheme.danger : TDButtonTheme.primary,
+                    theme:
+                        danger ? TDButtonTheme.danger : TDButtonTheme.primary,
                     size: TDButtonSize.large,
                     isBlock: true,
                     onTap: () => Navigator.of(dialogContext).pop(true),

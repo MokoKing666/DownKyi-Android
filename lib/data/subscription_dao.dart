@@ -86,7 +86,8 @@ class SubscriptionDao {
     }
   }
 
-  Future<Subscription?> findBySource(SubscriptionKind kind, String sourceId) async {
+  Future<Subscription?> findBySource(
+      SubscriptionKind kind, String sourceId) async {
     try {
       final db = await _db;
       final rows = await db.query(
@@ -105,7 +106,8 @@ class SubscriptionDao {
 
   /// 新增订阅并返回带 id 的实例；若同 kind + sourceId 已存在则返回已存在的那条
   Future<Subscription> insert(Subscription subscription) async {
-    final existing = await findBySource(subscription.kind, subscription.sourceId);
+    final existing =
+        await findBySource(subscription.kind, subscription.sourceId);
     if (existing != null) return existing;
     try {
       final db = await _db;
@@ -139,7 +141,8 @@ class SubscriptionDao {
   Future<void> delete(int id) async {
     try {
       final db = await _db;
-      await db.delete('subscription', where: 'id = ?', whereArgs: <Object?>[id]);
+      await db
+          .delete('subscription', where: 'id = ?', whereArgs: <Object?>[id]);
       await db.delete(
         'subscription_seen',
         where: 'subscription_id = ?',
@@ -227,7 +230,8 @@ class SubscriptionDao {
   }
 
   /// 未处理的新内容，按发现时间正序（旧的在前，便于按集数顺序下载）
-  Future<List<SeenItem>> pendingItems(int subscriptionId, {int limit = 200}) async {
+  Future<List<SeenItem>> pendingItems(int subscriptionId,
+      {int limit = 200}) async {
     try {
       final db = await _db;
       final rows = await db.query(

@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.8.0（versionCode 11） |
+| 版本 | v1.8.1（versionCode 12） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,78 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.8.1 —— 工程质量与可重复构建（技术评审第二阶段·一）
+
+这一版对用户不可见，全部是工程地基。之所以先做它，是因为评审列的其余问题
+（Android 15/16 后台、Keystore、智能下载、远程下载）都需要一个**能自动验证**的底座——
+否则每次改动都只能靠装上真机去撞，而前几版已经反复证明这条路代价很高
+（状态栏图标连续两版都没修对，根因就是没有可验证的反馈回路）。
+
+**新增：单元测试体系（评审第 24 项）**
+
+工程此前**一个测试都没有**。现在 `test/` 下有 5 个文件、**91 个用例**，
+全部不依赖设备与登录态，`flutter test` 秒级跑完：
+
+| 文件 | 覆盖 |
+|---|---|
+| `wbi_test.dart` | mixinKey 重排表、参数排序、非法字符剔除、UTF-8 编码、密钥未就绪 |
+| `link_parser_test.dart` | BV / av / b23 / ep / ss / 课程 / 收藏夹 / UP 主 / 合集 / 纯数字 / 未识别 |
+| `filename_test.dart` | 非法字符、结尾点号、超长截断、Emoji、路径穿越防护、同名去重 |
+| `task_key_test.dart` | 4K AVC/HEVC/AV1 可并存，不同音轨 / 字幕 / 弹幕配置互不冲突 |
+| `segment_downloader_test.dart` | 真实本地 HTTP 服务器覆盖 206 / 忽略 Range 的 200 / Content-Range 不符 / 416 / 读空闲超时 / 断点续传 / 分片失败 / URL 过期刷新 |
+
+两个刻意的设计：
+
+- **WBI 用外部锚点**：mixinKey 的期望值取自官方测试向量
+  （`img_key` / `sub_key` → `ea1db124af3c7062474693fa704f4ff8`），
+  而不是拿本实现的输出自证。那张 64 项重排表错一个数字，所有 wbi 接口都会静默返回 -403。
+- **分片下载器起真实本地 HTTP 服务器**，不用 mock Response。文档的验收标准全都和
+  HTTP 语义本身有关（206 的 Content-Range、服务器忽略 Range 却返回 200、416、连接半途静默停滞），
+  用假对象测的其实是「我以为的 HTTP」。
+
+**写测试时查出来的三个真问题**
+
+1. **读空闲超时抛出的是裸 `TimeoutException`**：`Stream.timeout` 的异常直接冒泡到任务层，
+   用户会看到 `TimeoutException after 0:00:00.4: No stream event`，
+   而文档要求的提示是「下载停滞，正在重新连接」。现在统一归一化为可读的 `ApiException`。
+2. **探测阶段不刷新 URL**：刷新逻辑只写在分片下载里。若播放地址在
+   「解析出地址 → 真正开始下载」之间就失效（订阅的后台任务、用户点了下载又等很久），
+   `_probe` 会直接抛错，刷新逻辑永远走不到。现在探测阶段同样会刷新。
+3. **tdesign 补丁只替换构造函数、不替换类型标注**：不同小版本的声明写法不一致
+   （`static const IconData x = _TDIconsData(...)` 与 `static const _TDIconsData x = ...`），
+   后者会残留并导致编译失败。现在有兜底替换 + 残留断言。
+
+**改进：构建可重复（评审第 26 项）**
+
+旧脚本直接改写 `%LOCALAPPDATA%\Pub\Cache\...\td_icons.dart`，三个问题：
+CI / 换机器 / 缓存被清都要重来；改的是所有工程共享的缓存，会污染别的项目；
+`flutter pub get` 一旦重下该包，补丁就静默失效。
+
+现在 `tools/prepare_tdesign.ps1` 从 pub 缓存复制出运行所需的最小集合
+（1.85 MB / 163 文件，不含 `example` 与 `demo_tool`），在副本上打补丁，落到 `third_party/`，
+再写入 `pubspec_overrides.yaml` 让 pub 指过去。两者都在 `.gitignore` 里，**仓库零膨胀**，
+pub 缓存也不再被触碰。脚本已做跨平台处理（Linux 的 `~/.pub-cache`、`PUB_CACHE` 覆盖、
+正斜杠路径），并自带两次 `pub get` 的顺序编排。
+
+**新增：GitHub Actions CI（评审第 25 项）**
+
+- `ci.yml`：push / PR 执行 `dart format --set-exit-if-changed` + `flutter analyze` + `flutter test`，
+  PR 上额外跑依赖审查
+- `release.yml`：打 `v*` tag（或手动指定 tag）自动构建 APK、计算 SHA256、发 Release，
+  说明章节直接从 README 的更新日志里抽取
+- `dependabot.yml`：每周检查 pub 依赖、每月检查 Actions 版本
+
+为了让格式检查能落地，本版对 `lib/` 与 `test/` 做了一次**全量 `dart format`**（45 文件变更，
+纯机械调整；已确认格式化后分析与测试全部通过）。
+
+**本批未做（第三、四批）**
+
+- 评审第 12 项 Android 15/16 后台下载重构（User-Initiated Data Transfer / Native Scheduler）
+- 评审第 13 项 Cookie / Secret 迁移 Android Keystore
+- 评审第 14 项 Bilibili API 分层解耦
+- 评审第 15~23、27 项（智能下载、预计大小、硬件兼容、下载规则、订阅追更、
+  Aria2/NAS、字幕与弹幕升级、FFmpeg 工具箱、Lite/Full 分包）
 
 ### v1.8.0 —— 稳定性专项（技术评审第一阶段）
 
@@ -448,7 +520,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.8.0-arm64-v8a.apk
+adb install -r DownKyi-v1.8.1-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
@@ -462,7 +534,7 @@ adb install -r DownKyi-v1.8.0-arm64-v8a.apk
 
 | 组件 | 版本 / 说明 |
 |---|---|
-| Flutter SDK | **3.47+**（stable），工程按 3.47.6 的 Android 模板对齐 |
+| Flutter SDK | **3.47+**（stable）。开发与验证使用 3.49；CI 跟随 stable |
 | JDK | 17 或以上（实测 Temurin 21） |
 | Android SDK | `platforms;android-36`、`build-tools;36.0.0`、`platform-tools` |
 | Gradle / AGP / Kotlin | `9.3.1` / `9.1.0` / `2.4.0`（与 Flutter 模板一致，已写入工程） |
@@ -473,8 +545,9 @@ cd DownKyi-Android
 
 flutter pub get
 
-# ⚠️ 必须先修补 tdesign_flutter 的图标兼容问题（原因见下方「构建注意事项」）
-powershell -ExecutionPolicy Bypass -File tools/patch_tdesign_icons.ps1
+# ⚠️ 必需：生成修补过的 tdesign_flutter 并写入 pubspec_overrides.yaml
+#   （原因见下方「构建注意事项」；脚本内部会再跑一次 pub get 让 override 生效）
+pwsh -File tools/prepare_tdesign.ps1
 
 # 只出 arm64-v8a 的 release 包
 flutter build apk --release --target-platform android-arm64
@@ -482,11 +555,41 @@ flutter build apk --release --target-platform android-arm64
 ```
 
 Windows 用户也可直接使用一键脚本（自动探测 Flutter / JDK / Android SDK，
-按需设置环境变量即可覆盖；内含依赖安装、图标补丁、构建与产物命名）：
+按需设置环境变量即可覆盖；内含依赖安装、tdesign 准备、构建与产物命名）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/build_apk.ps1
 ```
+
+### 测试与持续集成
+
+工程从 v1.8.1 起带一套不依赖设备与账号的单元测试，CI 会执行与本地完全相同的三条命令：
+
+```bash
+dart format --output=none --set-exit-if-changed lib test   # 格式
+flutter analyze                                            # 静态分析
+flutter test                                               # 单元测试
+```
+
+覆盖范围（`test/`）：
+
+| 文件 | 覆盖内容 |
+|---|---|
+| `wbi_test.dart` | WBI 签名的 mixinKey 重排表（**用官方测试向量做锚点**）、参数排序、非法字符剔除、UTF-8 编码、密钥未就绪 |
+| `link_parser_test.dart` | BV / av / b23 短链 / ep / ss / 课程 / 收藏夹 / UP 主 / 合集 / 纯数字 / 未识别 |
+| `filename_test.dart` | 非法字符、结尾点号、超长截断、Emoji 与全角、路径穿越防护、同名去重 |
+| `task_key_test.dart` | 4K AVC/HEVC/AV1 可并存、不同音轨/字幕/弹幕配置互不冲突 |
+| `segment_downloader_test.dart` | 起真实本地 HTTP 服务器，覆盖 206 / 忽略 Range 的 200 / Content-Range 不符 / 416 / 读空闲超时 / 断点续传 / 分片失败 / URL 过期刷新 |
+
+这些测试的价值不在于覆盖率数字，而是它们**能在几分钟内免费复现**「下载损坏但 UI 显示成功」
+这类最难复现的问题——之前只能靠用户装上包去撞。
+
+`.github/workflows/`：
+
+- `ci.yml`：push / PR 跑格式 + 分析 + 测试，PR 上额外做一次依赖审查
+- `release.yml`：打 `v*` tag（或手动指定 tag）时自动构建 APK、算 SHA256、发 Release，
+  说明章节直接从 README 的更新日志里抽取
+- `dependabot.yml`：每周检查 pub 依赖、每月检查 Actions 版本
 
 ### 关于 APK 体积
 
@@ -521,9 +624,18 @@ packaging {
    （本次即在 `C:\DownKyi` 完成构建与分析）。
 2. **`tdesign_flutter` 与新版 Flutter 不兼容（必须处理）**：
    其 `td_icons.dart` 用 `class _TDIconsData extends IconData` 定义图标常量，
-   而 Flutter 3.47+ 已把 `IconData` 改为 `final class`（0.2.7 与 0.2.8-fix.1 均未修复）。
-   `tools/patch_tdesign_icons.ps1` 会把它改写为直接构造 `IconData`，保留 `fontFamily/fontPackage`，
-   图标字体仍正常渲染。**每次 `flutter pub get` 重新下载该包后需要重跑一次。**
+   而 Flutter 3.47+ 已把 `IconData` 改为 `final class`（实测 3.49 确认；上游 0.2.7 与
+   0.2.8-fix.1 均未修复，修复只出现在预发布的 1.0.0-alpha.1）。
+   `tools/prepare_tdesign.ps1` 会从 pub 缓存复制出运行所需的最小集合、改写为直接构造
+   `IconData`（保留 `fontFamily/fontPackage`，图标字体照常渲染），落到 `third_party/`，
+   并写入 `pubspec_overrides.yaml` 让 pub 指过去。
+
+   > **为什么不再改 pub 缓存**：旧脚本直接改写 `%LOCALAPPDATA%\Pub\Cache\...`，
+   > 有三个问题——CI / 换机器 / 缓存被清都要重来；改的是所有工程共享的缓存，会污染别的项目；
+   > `flutter pub get` 一旦重下该包，补丁就静默失效。
+   > 现在 `third_party/` 与 `pubspec_overrides.yaml` 都在 `.gitignore` 里（仓库不因此膨胀），
+   > 同一 pub 版本必然产出同一份代码，pub 缓存也不再被触碰。
+   > 代价是 clone 之后需要执行一次本脚本。
 3. **JVM 走 IPv6 易导致依赖下载超时**：`android/gradle.properties` 已加
    `-Djava.net.preferIPv4Stack=true`；若 wrapper 下载 Gradle 发行包仍超时，
    可手动下载后放入 `~/.gradle/wrapper/dists/gradle-<版本>-bin/<hash>/` 并创建同名 `.ok` 文件。
@@ -578,9 +690,22 @@ android/app/src/main/kotlin/com/moko/downkyi/
 ├── MediaMuxerHelper.kt           MediaMuxer 无损封装（支持仅视频、仅音频）
 └── DownloadService.kt            前台服务：保活 + 通知栏进度
 
+test/
+├── wbi_test.dart                      WBI 签名（官方测试向量锚定）
+├── link_parser_test.dart              链接识别
+├── filename_test.dart                 文件名清洗与去重
+├── task_key_test.dart                 任务唯一标识
+└── segment_downloader_test.dart       分片下载器（真实本地 HTTP 服务器）
+
+.github/
+├── workflows/ci.yml                   格式 + 分析 + 测试 + 依赖审查
+├── workflows/release.yml              tag → 构建 APK → SHA256 → Release
+└── dependabot.yml                     依赖与 Actions 版本更新
+
 tools/
-├── build_apk.ps1                 一键打包（环境变量 + 补丁 + 构建 + 校验）
-└── patch_tdesign_icons.ps1       修补 tdesign_flutter 的 IconData 兼容问题
+├── build_apk.ps1                 一键打包（环境变量 + tdesign 准备 + 构建 + 校验）
+├── prepare_tdesign.ps1           生成修补过的 tdesign_flutter + pubspec_overrides.yaml
+└── publish_release.ps1           本地发布（与 release.yml 二选一）
 ```
 
 ---
