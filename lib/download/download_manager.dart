@@ -331,6 +331,15 @@ class DownloadManager extends ChangeNotifier {
       await _ensureCid(task);
       if (token.isCancelled) return;
 
+      // 只勾了封面 / 弹幕 / 字幕：既不需要播放地址，也不涉及合并，
+      // 直接去抓附加资源，省掉一次 playurl 请求
+      if (!task.wantVideo && !task.wantAudio) {
+        task.videoPath = null;
+        task.audioPath = null;
+        await _finishTask(task, dir);
+        return;
+      }
+
       if (usesAria2) {
         await _executeAria2(task, job);
         return;
@@ -413,7 +422,12 @@ class DownloadManager extends ChangeNotifier {
   Future<void> _finishTask(DownloadTask task, String dir) async {
     await _downloadExtras(task, dir);
 
-    if (!settings.mergeAv) {
+    if (task.videoPath == null && task.audioPath == null) {
+      // 只勾了封面 / 弹幕 / 字幕：没有媒体流可合并，直接收尾
+      task.merged = false;
+      task.outputPath = null;
+      AppLog.d('Task', '没有媒体流，跳过合并：${task.title}');
+    } else if (!settings.mergeAv) {
       // 设置里关掉了「自动合并音视频」：只保留分片，之后可在工具箱手动合并
       task.merged = false;
       task.outputPath = task.videoPath ?? task.audioPath;
@@ -728,6 +742,8 @@ class DownloadManager extends ChangeNotifier {
         localPath: output,
         fileName: '${task.fileName}.$extension',
         toGallery: settings.saveToGallery,
+        // 只有视频进 Movies；单独下的音轨进 Download，免得混进相册
+        category: videoPath != null ? 'video' : 'file',
       );
       task.outputPath = placed;
       task.exported = placed != null && placed != output;
@@ -746,7 +762,8 @@ class DownloadManager extends ChangeNotifier {
 
   /// 按保存位置落盘。
   ///
-  /// - 系统相册：通过 MediaStore 导出（视频 → Movies/DownKyi，图片 → Pictures/DownKyi，其它 → Downloads/DownKyi）
+  /// - 系统相册：通过 MediaStore 导出，目标目录由 [category] 决定
+  ///   （`video` → Movies，`image` → Pictures，其余 → Download）
   /// - 应用目录 / 自定义目录：原地保留
   ///
   /// 导出失败时回退为本地路径，绝不丢文件。
@@ -754,6 +771,7 @@ class DownloadManager extends ChangeNotifier {
     required String localPath,
     required String fileName,
     required bool toGallery,
+    String category = 'file',
   }) async {
     if (!toGallery) return localPath;
     final target = await NativeBridge.exportToPublic(
@@ -761,6 +779,7 @@ class DownloadManager extends ChangeNotifier {
       name: fileName,
       mime: mimeOf(localPath),
       album: AppInfo.englishName,
+      category: category,
     );
     if (target == null) {
       AppLog.e('Task', '导出到系统相册失败，保留本地副本：$fileName');
@@ -773,6 +792,77 @@ class DownloadManager extends ChangeNotifier {
   // ------------------------------------------------------------------
   // 目录与文件
   // ------------------------------------------------------------------
+
+  // ------------------------------------------------------------------
+  // 缓存
+  // ------------------------------------------------------------------
+
+  /// 缓存占用（工作目录下的临时分片目录）
+  Future<int> cacheBytes() async {
+    try {
+      final dir = await ensureDownloadDir();
+      return await _dirSize(Directory('$dir/.tmp'));
+    } catch (error) {
+      AppLog.e('Task', '统计缓存失败', error);
+      return 0;
+    }
+  }
+
+  /// 清理缓存：删除临时目录里不再被任何任务使用的分片。
+  ///
+  /// **保护规则**：未完成（排队 / 下载中 / 合并中 / 已暂停）的任务，
+  /// 其 `{key}_v.m4s` / `{key}_a.m4s` 以及对应的 `.partN` 分片一律保留，
+  /// 否则「暂停 / 继续」和断点续传会失效。已完成 / 失败 / 已删除任务的残留才会被清掉。
+  ///
+  /// 返回释放的字节数。
+  Future<int> clearCache() async {
+    var freed = 0;
+    try {
+      final dir = await ensureDownloadDir();
+      final tmp = Directory('$dir/.tmp');
+      if (!await tmp.exists()) return 0;
+
+      final keep = <String>[];
+      for (final task in tasks) {
+        if (task.status == TaskStatus.completed || task.status == TaskStatus.failed) {
+          continue;
+        }
+        keep.add('${task.key}_v.m4s');
+        keep.add('${task.key}_a.m4s');
+      }
+
+      await for (final entity in tmp.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (keep.any(name.startsWith)) continue;
+        try {
+          freed += await entity.length();
+          await entity.delete();
+        } catch (_) {
+          // 单个文件删不掉不影响整体
+        }
+      }
+      AppLog.d('Task', '清理缓存释放 ${(freed / 1024 / 1024).toStringAsFixed(1)} MB');
+    } catch (error) {
+      AppLog.e('Task', '清理缓存失败', error);
+    }
+    return freed;
+  }
+
+  Future<int> _dirSize(Directory dir) async {
+    if (!await dir.exists()) return 0;
+    var total = 0;
+    await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      if (entity is File) {
+        try {
+          total += await entity.length();
+        } catch (_) {
+          // 忽略单个文件的读取失败
+        }
+      }
+    }
+    return total;
+  }
 
   /// 本机工作目录（下载过程中的临时文件、未选择相册时的落盘位置）
   Future<String> ensureDownloadDir() async {
@@ -856,6 +946,7 @@ class DownloadManager extends ChangeNotifier {
       name: '${task.fileName}.$extension',
       mime: mimeOf(path),
       album: AppInfo.englishName,
+      category: exportCategoryOf(path),
     );
     if (target != null) {
       task.exported = true;
@@ -878,6 +969,21 @@ class DownloadManager extends ChangeNotifier {
       'png' => 'image/png',
       'ass' || 'srt' || 'xml' || 'txt' => 'text/plain',
       _ => 'application/octet-stream',
+    };
+  }
+
+  /// 导出到公共目录时的目标文件夹类别。
+  ///
+  /// 只有视频进 `Movies`，图片进 `Pictures`；
+  /// **封面 / 弹幕 / 字幕 / 单独下载的音轨统一进 `Download`**——
+  /// 过去封面按 MIME 被送进 `Pictures/`，弹幕字幕却在 `Downloads/`，
+  /// 用户根本不知道文件去哪了。
+  static String exportCategoryOf(String path) {
+    final extension = path.split('.').last.toLowerCase();
+    return switch (extension) {
+      'mp4' || 'mkv' => 'video',
+      'jpg' || 'jpeg' || 'png' || 'gif' => 'image',
+      _ => 'file',
     };
   }
 

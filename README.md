@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.5.0（versionCode 8） |
+| 版本 | v1.6.0（versionCode 9） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,41 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.6.0
+
+**修复**
+
+- **合并出来的视频卡顿（重要）**：`MediaMuxerHelper` 过去为了保证「时间戳单调递增」，
+  把回退的 PTS 强行改写成 `lastWritten + 1`。但 **B 站视频普遍带 B 帧**，
+  而 B 帧在解码顺序里的 PTS 本来就是回退的（例如 `I(0) P(3) B(1) B(2)`），
+  改写后帧的显示时刻被压平、显示顺序错乱，表现就是「合并出来的视频卡卡的」。
+  实际上 **MediaMuxer 从 Android 7.1（API 25 / Nougat MR1）起就支持把 B 帧封装进 MP4**，
+  所以 API 25+ 现在原样写入真实 PTS；只有 API 24 才退回单调处理（那里本来也不支持 B 帧）。
+  交错顺序也从「比较当前 PTS」改成「比较各轨已读到的最大时间戳」，
+  否则 B 帧的 PTS 回退会让交错顺序来回抖动。单帧缓冲从 1MB 提到 4MB
+  （1MB 装不下 4K 关键帧，`readSampleData` 会直接抛异常）。
+- **状态栏图标改了不生效**：资源名不变时，SystemUI 会**按资源名复用缓存下来的旧图标位图**，
+  于是出现「换了图标但通知栏没变」。现在把资源改名为 `ic_stat_downkyi`
+  （mdpi ~ xxxhdpi 五套密度），`DownloadService` 与通知插件同步更新。
+  另外 v1.4.0 的 Release APK 因为构建脚本没做镜像同步，
+  实际打进去的仍是旧的 `ic_stat_download.xml`，也需要一并升级。
+
+**新增**
+
+- **解析 / 下载处可直接选保存位置**：在清晰度、编码、音频、下载内容之外新增「保存位置」，
+  可选系统相册 / 应用目录 / 自定义目录，自定义目录支持就地编辑，不用再跳回设置页。
+- **可以只下载封面 / 弹幕 / 字幕**：过去会被「请至少选择视频或音频」拦住，
+  现在没有媒体流时跳过合并直接收尾，并把附加文件导出到公共目录。
+- **清理缓存**：工具箱新增入口，先显示可释放空间，再删除临时分片与残留文件。
+  正在下载 / 已暂停的任务分片会保留，**不影响断点续传**，已下载的成品也不会被删。
+
+**改进：附加文件不再「不知道去哪了」**
+
+- 过去导出目录靠 MIME 推断：封面是 `image/jpeg`，被送进 `Pictures/<album>`；
+  而弹幕 / 字幕落到 `Downloads/<album>`，用户根本找不到文件。
+- 现在目标目录由调用方显式指定：**视频 → `Movies/<album>`，
+  封面 / 弹幕 / 字幕 / 单独下载的音轨 → `Download/<album>`**，位置固定可预期。
 
 ### v1.5.0
 
@@ -295,7 +330,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.5.0-arm64-v8a.apk
+adb install -r DownKyi-v1.6.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

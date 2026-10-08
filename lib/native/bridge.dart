@@ -40,14 +40,18 @@ class NativeBridge {
     }
   }
 
-  /// 导出到系统公共目录（相册 / 图片 / 下载），返回公共路径或 content uri
+  /// 导出到系统公共目录，返回公共路径或 content uri
   ///
-  /// 视频 → Movies/<album>，图片 → Pictures/<album>，其它 → Downloads/<album>
+  /// [category] 显式指定目标目录，不再靠 MIME 推断：
+  /// - `video` → `Movies/<album>`
+  /// - `image` → `Pictures/<album>`
+  /// - `file`（默认，含封面/弹幕/字幕）→ `Download/<album>`
   static Future<String?> exportToPublic({
     required String path,
     required String name,
     String mime = 'video/mp4',
     String album = 'DownKyi',
+    String category = 'file',
   }) async {
     try {
       return await _channel.invokeMethod<String>('exportToPublic', <String, dynamic>{
@@ -55,6 +59,7 @@ class NativeBridge {
         'name': name,
         'mime': mime,
         'album': album,
+        'category': category,
       });
     } catch (error) {
       AppLog.e('Native', '导出失败', error);

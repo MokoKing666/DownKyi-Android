@@ -114,7 +114,7 @@ class DownloadService : Service() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }
-        builder.setSmallIcon(R.drawable.ic_stat_download)
+        builder.setSmallIcon(R.drawable.ic_stat_downkyi)
             .setContentTitle(titleText)
             .setContentText(bodyText)
             .setOngoing(true)

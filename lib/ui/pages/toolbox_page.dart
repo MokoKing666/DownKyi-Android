@@ -74,10 +74,16 @@ class ToolboxPage extends StatelessWidget {
                         ),
                         _ToolEntry(
                           icon: Icons.save_alt,
-                          title: '导出到相册',
-                          description: '把文件复制到系统媒体库对应目录',
-                          showDivider: false,
+                          title: '导出到相册 / 下载目录',
+                          description: '视频进 Movies，其它文件统一进 Download',
                           onTap: () => _pickTaskThen(context, title: '选择要导出的任务', action: _export),
+                        ),
+                        _ToolEntry(
+                          icon: Icons.cleaning_services_outlined,
+                          title: '清理缓存',
+                          description: '删除临时分片与残留文件，不影响已下载的成品',
+                          showDivider: false,
+                          onTap: () => _clearCache(context),
                         ),
                       ],
                     ),
@@ -186,6 +192,50 @@ class ToolboxPage extends StatelessWidget {
   // ------------------------------------------------------------------
   // 格式转换
   // ------------------------------------------------------------------
+
+  /// 清理缓存：只删临时分片与残留文件。
+  ///
+  /// 保护规则在 `DownloadManager.clearCache()` 里：正在下载 / 已暂停的任务
+  /// 其分片会保留，断点续传不受影响。
+  Future<void> _clearCache(BuildContext context) async {
+    final manager = context.read<DownloadManager>();
+    tdLoadingShow(context, text: '统计缓存');
+    final before = await manager.cacheBytes();
+    tdLoadingHide();
+    if (!context.mounted) return;
+    if (before <= 0) {
+      tdToast(context, '没有可清理的缓存');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: TdPalette.container,
+        title: Text('清理缓存', style: TdText.titleSmall),
+        content: Text(
+          '将删除临时分片与残留文件，可释放约 ${formatBytes(before)}。\n\n'
+          '正在下载、已暂停的任务分片会保留，断点续传不受影响；'
+          '已下载完成的文件不会被删除。',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清理'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final freed = await manager.clearCache();
+    if (!context.mounted) return;
+    tdToastSuccess(context, '已释放 ${formatBytes(freed)}');
+  }
 
   Future<void> _convertFromTask(BuildContext context) async {
     if (context.read<DownloadManager>().finishedTasks.isEmpty) {

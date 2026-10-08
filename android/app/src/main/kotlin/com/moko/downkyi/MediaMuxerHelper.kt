@@ -4,6 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.os.Build
 import java.io.File
 import java.nio.ByteBuffer
 
@@ -21,7 +22,20 @@ import java.nio.ByteBuffer
  */
 object MediaMuxerHelper {
 
-    private const val BUFFER_SIZE = 1 shl 20
+    /** 单帧上限 4MB：1MB 装不下 4K 关键帧，readSampleData 会直接抛异常 */
+    private const val BUFFER_SIZE = 4 shl 20
+
+    /**
+     * MediaMuxer **从 Android 7.1（API 25 / Nougat MR1）起才支持把 B 帧封装进 MP4**。
+     *
+     * B 站视频普遍带 B 帧，而 B 帧在解码顺序里的 PTS 本来就是回退的
+     * （例如 I(0) P(3) B(1) B(2)），所以 API 25+ 必须**原样写入真实 PTS**。
+     * 早先的实现为了满足「时间戳必须单调」把回退的 PTS 改写成 last+1，
+     * 结果帧的显示时刻被压平、显示顺序错乱，表现就是「合并出来的视频卡卡的」。
+     *
+     * 只有 API 24 需要退回单调处理——那里本来就不支持 B 帧，压平是唯一能封装成功的办法。
+     */
+    private val supportsBFrames = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1
 
     /** 一条待搬运的轨道：(所属输入, 输入轨下标) -> 输出轨下标 */
     private class TrackRef(val extractor: MediaExtractor, val source: Int) {
@@ -78,8 +92,11 @@ object MediaMuxerHelper {
             val info = MediaCodec.BufferInfo()
             val finished = BooleanArray(refs.size)
             val lastWritten = LongArray(refs.size) { Long.MIN_VALUE }
+            // 交错用的进度键：记录该轨已读到的最大时间戳，保证单调
+            val progress = LongArray(refs.size) { Long.MIN_VALUE }
 
-            // 把所有轨道的样本按时间戳交错写入
+            // 所有轨道的样本按时间戳交错写入；每条轨内部始终保持 extractor 的读取顺序
+            // （也就是解码顺序），不会因为 PTS 回退而被重排
             while (true) {
                 var pick = -1
                 var pickTime = Long.MAX_VALUE
@@ -90,8 +107,11 @@ object MediaMuxerHelper {
                         finished[index] = true
                         continue
                     }
-                    if (time < pickTime) {
-                        pickTime = time
+                    // 用「已读到的最大值」而不是当前 PTS 做交错依据：
+                    // B 帧的 PTS 会回退，直接拿它比较会让交错顺序来回抖动
+                    if (time > progress[index]) progress[index] = time
+                    if (progress[index] < pickTime) {
+                        pickTime = progress[index]
                         pick = index
                     }
                 }
@@ -105,9 +125,11 @@ object MediaMuxerHelper {
                     continue
                 }
                 var time = ref.extractor.sampleTime
-                // MediaMuxer 要求同一轨道的时间戳严格递增，重复时间戳会直接抛异常
-                if (time <= lastWritten[pick]) time = lastWritten[pick] + 1
-                lastWritten[pick] = time
+                if (!supportsBFrames) {
+                    // 仅 API 24：MediaMuxer 还不支持 B 帧，只能把时间戳压成单调递增
+                    if (time <= lastWritten[pick]) time = lastWritten[pick] + 1
+                    lastWritten[pick] = time
+                }
 
                 info.offset = 0
                 info.size = size

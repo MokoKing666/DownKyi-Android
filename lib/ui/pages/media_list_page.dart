@@ -125,10 +125,6 @@ class MediaListPage extends StatelessWidget {
       referenceLoaded: referenceLoaded,
     );
     if (!confirmed || !context.mounted) return;
-    if (!parse.wantVideo && !parse.wantAudio) {
-      tdToast(context, '请至少选择「视频」或「音频」');
-      return;
-    }
 
     tdLoadingShow(context, text: '创建任务');
     final count = await parse.enqueueBatch();

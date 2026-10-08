@@ -54,8 +54,9 @@ object NativeBridge {
                 val name = call.argument<String>("name")
                 val mime = call.argument<String>("mime") ?: "video/mp4"
                 val album = call.argument<String>("album") ?: "DownKyi"
+                val category = call.argument<String>("category") ?: "file"
                 if (path == null || name == null) null
-                else exportToPublic(activity, path, name, mime, album)
+                else exportToPublic(activity, path, name, mime, album, category)
             }
 
             "fileSize" -> {
@@ -267,23 +268,30 @@ object NativeBridge {
     }
 
     /**
-     * 导出到系统公共目录（相册）：
+     * 导出到系统公共目录：
      * - Android 10+ 走 MediaStore（无需存储权限，相册/文件管理器可见）
      * - Android 9 及以下直接写入公共目录（需要 WRITE_EXTERNAL_STORAGE）
      *
-     * 默认保存位置就是「系统相册」，因此下载完成后会走这里。
+     * 目标目录由调用方通过 [category] 显式指定，**不再靠 MIME 推断**：
+     * 封面是 `image/jpeg`，过去会被塞进 `Pictures/<album>`，
+     * 而弹幕/字幕又落在 `Downloads/<album>`，用户根本找不到。
+     *
+     * - `video` → `Movies/<album>`
+     * - `image` → `Pictures/<album>`
+     * - 其它（含封面/弹幕/字幕）→ `Download/<album>`
      */
     private fun exportToPublic(
         activity: Activity,
         path: String,
         displayName: String,
         mime: String,
-        album: String
+        album: String,
+        category: String
     ): String? {
         val src = File(path)
         if (!src.exists()) return null
-        val isVideo = mime.startsWith("video")
-        val isImage = mime.startsWith("image")
+        val isVideo = category == "video"
+        val isImage = category == "image"
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val relativePath = when {

@@ -133,10 +133,7 @@ class VideoDetailPage extends StatelessWidget {
 
   Future<void> _download(BuildContext context) async {
     final parse = context.read<ParseController>();
-    if (!parse.wantVideo && !parse.wantAudio) {
-      tdToast(context, '请至少选择「视频」或「音频」');
-      return;
-    }
+    // 允许只下封面 / 弹幕 / 字幕：没有媒体流时下载管理器会跳过合并直接收尾
     if (parse.wantVideo && parse.wantAudio && !parse.availableCodecs.contains(parse.codec)) {
       tdToast(context, '当前清晰度不支持所选编码，已自动切换');
     }

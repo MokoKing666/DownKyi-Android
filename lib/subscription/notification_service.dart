@@ -47,7 +47,10 @@ class NotificationService {
     if (_ready) return;
     try {
       const settings = InitializationSettings(
-        android: AndroidInitializationSettings('ic_stat_download'),
+        // 注意：资源名与 DownloadService 里的 R.drawable.ic_stat_downkyi 必须一致。
+        // 之前用 ic_stat_download 时，因为资源名没变，SystemUI 会按名字复用
+        // 缓存下来的旧图标位图，表现为「换了图标但通知栏没变」，所以这里改名。
+        android: AndroidInitializationSettings('ic_stat_downkyi'),
       );
       await _plugin.initialize(
         settings: settings,
