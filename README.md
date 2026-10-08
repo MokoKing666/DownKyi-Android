@@ -114,9 +114,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 
 ## 🧾 更新日志
 
-### v2.0.9（当前版本）
-
-> v1.7.0 之后没有再单独发过 Release，这里把这一段时间的变化一次性说清楚。
+### v2.0.9
 
 **新增功能**
 
