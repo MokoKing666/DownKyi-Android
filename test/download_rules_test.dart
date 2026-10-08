@@ -620,10 +620,11 @@ void main() {
       expect(args.contains('-movflags'), isFalse);
     });
 
-    test('单输入：只有一个 -i，且仍然搬全部视频轨', () {
+    test('单输入：只有一个 -i、一条视频轨', () {
       final args = FfmpegOps.remux(video: 'a.m4s', output: 'o.m4a');
       expect(args.where((item) => item == '-i').length, 1);
-      expect(args[args.indexOf('-map') + 1], '0:v');
+      // 与双输入保持一致：只取第一条视频轨
+      expect(args[args.indexOf('-map') + 1], '0:v:0');
       expect(args.where((item) => item == '-map').length, 1);
       expect(args[args.indexOf('-c') + 1], 'copy');
     });
