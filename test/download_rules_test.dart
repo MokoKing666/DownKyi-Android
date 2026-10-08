@@ -581,6 +581,60 @@ void main() {
     });
   });
 
+  group('FfmpegOps 无损重封装（修复画面卡顿用）', () {
+    test('音视频双输入：显式 -map，避免多搬无关轨道', () {
+      final args =
+          FfmpegOps.remux(video: 'v.m4s', audio: 'a.m4s', output: 'out.mp4');
+      expect(args.where((item) => item == '-i').length, 2);
+      expect(args[args.indexOf('-i') + 1], 'v.m4s');
+      expect(args.lastIndexOf('-i'), greaterThan(args.indexOf('-i')));
+      expect(args[args.lastIndexOf('-i') + 1], 'a.m4s');
+      // 只取第一条视频轨 + 第一条音频轨
+      expect(args[args.indexOf('-map') + 1], '0:v:0');
+      expect(args.lastIndexOf('-map'), greaterThan(args.indexOf('-map')));
+      expect(args[args.lastIndexOf('-map') + 1], '1:a:0');
+    });
+
+    test('必须是无损：-c copy，不能出现任何编码器', () {
+      final args =
+          FfmpegOps.remux(video: 'v.m4s', audio: 'a.m4s', output: 'o.mp4');
+      expect(args[args.indexOf('-c') + 1], 'copy');
+      expect(args.where((item) => item == '-c').length, 1);
+      for (final encoder in <String>['libx264', 'libx265', 'libvpx-vp9']) {
+        expect(args.contains(encoder), isFalse);
+      }
+    });
+
+    test('默认把 moov 前置，便于起播与拖动', () {
+      final args = FfmpegOps.remux(video: 'v.m4s', output: 'o.mp4');
+      expect(args[args.indexOf('-movflags') + 1], '+faststart');
+    });
+
+    test('可以关掉 faststart（大文件省一次尾部搬移）', () {
+      final args =
+          FfmpegOps.remux(video: 'v.m4s', output: 'o.mp4', fastStart: false);
+      expect(args.contains('-movflags'), isFalse);
+    });
+
+    test('只有音频时只有一个输入、不带 -map', () {
+      final args = FfmpegOps.remux(video: 'a.m4s', output: 'o.m4a');
+      expect(args.where((item) => item == '-i').length, 1);
+      expect(args.contains('-map'), isFalse);
+      expect(args[args.indexOf('-c') + 1], 'copy');
+    });
+
+    test('空音频路径等同单输入', () {
+      final args = FfmpegOps.remux(video: 'v.m4s', audio: '', output: 'o.mp4');
+      expect(args.where((item) => item == '-i').length, 1);
+    });
+
+    test('输出路径永远在最后', () {
+      expect(FfmpegOps.remux(video: 'v', audio: 'a', output: 'r.mp4').last,
+          'r.mp4');
+      expect(FfmpegOps.remux(video: 'v', output: 'r.m4a').last, 'r.m4a');
+    });
+  });
+
   group('TaskSources 任务来源（第 20 项）', () {
     test('本机地址识别', () {
       expect(TaskSources.isLoopback('http://127.0.0.1:6800/jsonrpc'), isTrue);

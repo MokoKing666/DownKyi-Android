@@ -13,6 +13,8 @@ import '../data/download_task.dart';
 import '../data/http_client.dart';
 import '../bili/models.dart';
 import '../bili/subtitles.dart';
+import 'ffmpeg_ops.dart';
+import 'ffmpeg_service.dart';
 import '../data/settings_store.dart';
 import '../data/task_dao.dart';
 import '../native/bridge.dart';
@@ -859,6 +861,37 @@ class DownloadManager extends ChangeNotifier {
     return failed;
   }
 
+  /// 用 FFmpeg 无损重新封装（原因见 FfmpegOps.remux 的注释）。
+  ///
+  /// 返回 false 表示「没成功」或「不可用」，调用方应回退到系统 MediaMuxer。
+  Future<bool> _remuxWithFfmpeg(
+    String? video,
+    String? audio,
+    String output,
+  ) async {
+    if (!BuildFlavor.supportsFfmpeg) return false;
+    final first = video ?? audio;
+    if (first == null) return false;
+    // 同一时间只能跑一个 FFmpeg 任务
+    if (FfmpegService.isBusy) return false;
+
+    try {
+      final result = await FfmpegService.run(
+        FfmpegOps.remux(
+          video: first,
+          audio: video == null ? null : audio,
+          output: output,
+        ),
+      );
+      if (!result.success) return false;
+      final file = File(output);
+      return await file.exists() && await file.length() > 1024;
+    } catch (error) {
+      AppLog.e('Task', 'FFmpeg 重新封装失败，回退系统封装', error);
+      return false;
+    }
+  }
+
   Future<void> _merge(DownloadTask task, String dir) async {
     final videoPath = task.videoPath;
     final audioPath = task.audioPath;
@@ -884,9 +917,16 @@ class DownloadManager extends ChangeNotifier {
       }
     } else {
       // 音频要无条件传进去：只有音频没有视频时也必须输出 m4a，
-      // 不能因为「缺少视频轨」就把音频丢掉导致封装必然失败
-      ok = await NativeBridge.mux(
-          video: videoPath, audio: audioPath, output: output);
+      // 不能因为「缺少视频轨」就把音频丢掉导致封装必然失败。
+      //
+      // 顺序上优先 FFmpeg：B 站片源普遍带 B 帧，解码顺序里 PTS 天然回退，
+      // 而 MediaMuxer 对非单调时间戳的处理在各 Android 版本 / OEM 上并不一致，
+      // 最坏会丢掉回退的样本——成品的大小、轨道数、时长全都正常，
+      // 唯独画面一顿一顿的，极难从产物上判断。详见 FfmpegOps.remux 的注释。
+      // 精简包没有 FFmpeg，会自动回退到 MediaMuxer。
+      ok = await _remuxWithFfmpeg(videoPath, audioPath, output) ||
+          await NativeBridge.mux(
+              video: videoPath, audio: audioPath, output: output);
     }
 
     if (ok) {

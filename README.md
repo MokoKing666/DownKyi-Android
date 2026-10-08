@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.1（versionCode 15） |
+| 版本 | v2.0.2（versionCode 16） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,35 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v2.0.2 —— 修复「合并后画面一顿一顿」
+
+**改用 FFmpeg 做无损重封装，MediaMuxer 退为兜底。**
+
+我先把 v1.6.0 到现在的 `MediaMuxerHelper` 做了逐行 diff 核对：**合并逻辑本身没有回归**
+（`lastWritten` 只在 API 24 分支生效，API 25+ 写的就是真实 PTS，两版逐字相同）。
+所以问题不在「我改坏了什么」，而在 MediaMuxer 这条路本身：
+
+B 站片源普遍带 B 帧，B 帧在解码顺序里的 PTS 天然回退（I(0) P(3) B(1) B(2)）。
+MP4 要表达这种回退必须写 `ctts` 表，而 **MediaMuxer 对非单调时间戳的处理
+在各 Android 版本 / 各 OEM 实现上并不一致**，最坏的情况是直接丢掉回退的样本。
+表现就是画面一顿一顿的，而**成品的大小、轨道数、时长全都正常**——
+极难从产物上判断，这也是它反复出现的原因。
+
+App 里本来就打包了完整 FFmpeg，`-c copy` 会正确生成 `ctts`，不依赖设备实现。
+现在自动合并与工具箱的手动合并都优先走 FFmpeg：
+
+```
+ffmpeg -y -i video.m4s -i audio.m4s -map 0:v:0 -map 1:a:0 -c copy -movflags +faststart out.mp4
+```
+
+- `-c copy` 保证无损，不重新编码
+- 显式 `-map` 只取第一条视频轨 + 第一条音频轨，不搬入无关轨道
+- `+faststart` 把 moov 前置：起播不用先读完整段，拖进度条也不卡一下
+- 精简包（无 FFmpeg）或 FFmpeg 失败时自动回退 MediaMuxer
+
+**已经下好的任务不用重新下载**：原始分片是保留的，直接到
+**工具 → 重新合并音视频** 重新跑一次即可，这次走的是 FFmpeg。
 
 ### v2.0.1 —— 修复「自动合并与手动合成都失败」
 
@@ -769,7 +798,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.1-arm64-v8a.apk
+adb install -r DownKyi-v2.0.2-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

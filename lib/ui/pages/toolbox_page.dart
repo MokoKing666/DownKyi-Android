@@ -8,11 +8,13 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
 import '../../core/formatter.dart';
+import '../../core/logger.dart';
 import '../../bili/bili_api.dart';
 import '../../data/download_task.dart';
 import '../../data/settings_store.dart';
 import '../../download/danmaku_writer.dart';
 import '../../download/download_manager.dart';
+import '../../download/ffmpeg_ops.dart';
 import '../../download/ffmpeg_service.dart';
 import '../../native/bridge.dart';
 import '../td.dart';
@@ -597,6 +599,43 @@ class ToolboxPage extends StatelessWidget {
     );
   }
 
+  /// 用 FFmpeg 无损重新封装。
+  ///
+  /// 为什么优先于系统 MediaMuxer（见 FfmpegOps.remux 的注释）：
+  /// B 站片源普遍带 B 帧，解码顺序里 PTS 天然回退，而 MediaMuxer 对这种
+  /// 非单调时间戳的处理在各 Android 版本 / OEM 上不一致，最坏会丢掉回退的样本——
+  /// 表现就是「画面一顿一顿的」，但文件大小、轨道数、时长全都正常。
+  /// FFmpeg 的 `-c copy` 会正确写 ctts，不依赖设备实现。
+  ///
+  /// 返回 false 时调用方回退到 MediaMuxer（精简包排除了 FFmpeg，只能用后者）。
+  static Future<bool> _remuxWithFfmpeg({
+    required String? video,
+    required String? audio,
+    required String output,
+  }) async {
+    if (!BuildFlavor.supportsFfmpeg) return false;
+    final first = video ?? audio;
+    if (first == null) return false;
+    // 同一时间只能跑一个 FFmpeg 任务
+    if (FfmpegService.isBusy) return false;
+
+    try {
+      final result = await FfmpegService.run(
+        FfmpegOps.remux(
+          video: first,
+          audio: video == null ? null : audio,
+          output: output,
+        ),
+      );
+      if (!result.success) return false;
+      final file = File(output);
+      return await file.exists() && await file.length() > 1024;
+    } catch (error) {
+      AppLog.e('Toolbox', 'FFmpeg 重新封装失败，回退系统封装', error);
+      return false;
+    }
+  }
+
   Future<void> _export(BuildContext context, DownloadTask task) async {
     final manager = context.read<DownloadManager>();
     tdLoadingShow(context, text: '导出中');
@@ -633,11 +672,18 @@ class ToolboxPage extends StatelessWidget {
             : '$current.mp4');
 
     if (context.mounted) tdLoadingShow(context, text: '合并中');
-    final ok = await NativeBridge.mux(
-      video: hasVideo ? videoPath : null,
-      audio: hasAudio ? audioPath : null,
-      output: target,
-    );
+    // 优先 FFmpeg 无损封装，失败或不可用（精简包）时回退系统 MediaMuxer。
+    // 详见 FfmpegOps.remux 的注释。
+    final ok = await _remuxWithFfmpeg(
+          video: hasVideo ? videoPath : null,
+          audio: hasAudio ? audioPath : null,
+          output: target,
+        ) ||
+        await NativeBridge.mux(
+          video: hasVideo ? videoPath : null,
+          audio: hasAudio ? audioPath : null,
+          output: target,
+        );
 
     if (!ok) {
       if (context.mounted) {

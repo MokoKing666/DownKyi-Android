@@ -45,6 +45,39 @@ class FfmpegOps {
     ];
   }
 
+  /// 无损重新封装（视频与音频分别来自两个文件的场景）。
+  ///
+  /// **为什么优先用 FFmpeg 而不是系统 MediaMuxer**：
+  /// B 站视频普遍带 B 帧，而 B 帧在解码顺序里的 PTS 本来就是回退的
+  /// （例如 I(0) P(3) B(1) B(2)）。MP4 要表达这种回退必须写 `ctts` 表，
+  /// 而 MediaMuxer 对非单调时间戳的处理在**各 Android 版本 / 各 OEM 的实现上并不一致**，
+  /// 最坏的情况是直接把回退的样本丢掉——表现就是「画面一顿一顿的」，
+  /// 但文件大小、轨道数、时长全都正常，所以极难从产物上判定。
+  ///
+  /// FFmpeg 的 `-c copy` 会正确生成 `ctts`，这是它作为重封装工具的标准用法，
+  /// 不依赖设备实现。因此合并优先走这条路，MediaMuxer 只作兜底（精简包）。
+  static List<String> remux({
+    required String video,
+    String? audio,
+    required String output,
+    bool fastStart = true,
+  }) {
+    final args = <String>['-y', '-i', video];
+    if (audio != null && audio.isNotEmpty) {
+      // 显式 -map：只要第一条视频轨和第一条音频轨，
+      // 免得输入里的数据轨 / 封面轨被一起搬进产物
+      args.addAll(<String>['-i', audio, '-map', '0:v:0', '-map', '1:a:0']);
+    }
+    args.addAll(<String>['-c', 'copy']);
+    if (fastStart) {
+      // 把 moov 挪到文件头：播放器不用先读完整段就能起播，
+      // 拖动进度条也不会卡一下。代价是封装时多一次尾部数据搬移。
+      args.addAll(<String>['-movflags', '+faststart']);
+    }
+    args.add(output);
+    return args;
+  }
+
   /// 调整音量。只动音频滤镜，视频直接复制。
   static List<String> volume({
     required String input,
