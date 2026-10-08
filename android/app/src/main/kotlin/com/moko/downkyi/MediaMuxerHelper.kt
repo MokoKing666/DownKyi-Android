@@ -197,9 +197,22 @@ object MediaMuxerHelper {
     /**
      * 封装后的轻量校验。
      *
-     * MediaMuxer 返回成功并不代表文件可播放——轨道缺失、时长为 0、
-     * 或根本读不出样本的情况都可能出现，而这些文件交到用户手里就是「下坏了」。
-     * 校验失败时调用方会删掉产物，让上层保留原始分片并提示「重新合并」。
+     * 设计原则（这条很重要，之前踩过）：
+     * **只有「能确证坏了」才判失败。拿不准的一律放过。**
+     *
+     * 因为调用方在校验失败时会把产物删掉——基于猜测删除用户花了半小时下载、
+     * 刚封装好的文件，比放过一个可能有问题但多半能播的文件糟糕得多。
+     *
+     * 曾经的两个假失败（v1.8.0 引入，会让所有视频合并都报失败）：
+     *
+     * 1. 用 64KB 缓冲去读第 0 轨（视频轨）的第一个样本。视频轨首帧是 IDR 关键帧，
+     *    1080p 就轻松超过 100KB、4K 上 MB，`readSampleData` 必然抛
+     *    IllegalArgumentException，被 catch 吞掉后返回 false。
+     *    现在改为自适应扩容，并且**「缓冲不够」这个异常本身就算作样本存在的证据**。
+     *
+     * 2. `durationUs <= 0` 直接判失败。但 `MediaExtractor` 是否给 MP4 轨道填
+     *    `KEY_DURATION` 依设备实现而异，填不上时恒为 0——把「不知道」当成「坏了」，
+     *    同样是整片误杀。现在只在**确实拿到且为负数**时才怀疑。
      */
     private fun verifyOutput(path: String, expectVideo: Boolean, expectAudio: Boolean): Boolean {
         val file = File(path)
@@ -212,24 +225,18 @@ object MediaMuxerHelper {
 
             var hasVideo = false
             var hasAudio = false
-            var durationUs = 0L
             for (index in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(index)
                 val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
-                if (format.containsKey(MediaFormat.KEY_DURATION)) {
-                    durationUs = maxOf(durationUs, format.getLong(MediaFormat.KEY_DURATION))
-                }
                 if (mime.startsWith("video/")) hasVideo = true
                 if (mime.startsWith("audio/")) hasAudio = true
             }
+            // 这两条才是真正有价值的检查：它们能抓到「只搬了第一条视频轨、
+            // 音频被静默丢掉」这类封装错误，而且不会误判。
             if (expectVideo && !hasVideo) return false
             if (expectAudio && !hasAudio) return false
-            if (durationUs <= 0) return false
 
-            // 至少能读出一个样本
-            extractor.selectTrack(0)
-            val probe = ByteBuffer.allocateDirect(1 shl 16)
-            extractor.readSampleData(probe, 0) >= 0
+            hasReadableSample(extractor)
         } catch (_: Throwable) {
             false
         } finally {
@@ -239,5 +246,41 @@ object MediaMuxerHelper {
                 // 忽略
             }
         }
+    }
+
+    /**
+     * 能否从输出文件里读出至少一个样本。
+     *
+     * 关键点：`readSampleData` 在缓冲不够时抛异常，而**抛异常恰恰证明样本是存在的**，
+     * 只是当前缓冲装不下。所以这里把「缓冲不足」当成好消息处理，逐级放大后重试；
+     * 真到放不下（超大关键帧）就直接认定通过，而不是把成品删掉。
+     */
+    private fun hasReadableSample(extractor: MediaExtractor): Boolean {
+        val trackCount = extractor.trackCount
+        if (trackCount <= 0) return false
+
+        // 从 KEY_MAX_INPUT_SIZE 拿提示，拿不到就起步 1MB
+        var capacity = 1 shl 20
+        try {
+            val format = extractor.getTrackFormat(0)
+            if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                capacity = maxOf(capacity, format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE))
+            }
+        } catch (_: Throwable) {
+            // 拿不到提示不影响，用默认值
+        }
+
+        extractor.selectTrack(0)
+        repeat(5) {
+            try {
+                return extractor.readSampleData(ByteBuffer.allocateDirect(capacity), 0) >= 0
+            } catch (_: IllegalArgumentException) {
+                // 缓冲装不下这个样本 —— 说明样本存在，放大后重试
+                capacity *= 4
+            } catch (_: Throwable) {
+                return true
+            }
+        }
+        return true
     }
 }

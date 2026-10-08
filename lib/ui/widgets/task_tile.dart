@@ -129,17 +129,28 @@ class TaskTile extends StatelessWidget {
         style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
   }
 
-  /// 视频本体完成，但封面 / 弹幕 / 字幕里可能有失败项。
+  /// 视频本体完成，但封面 / 弹幕 / 字幕里可能有失败项，或者封装没成功。
   ///
-  /// 过去无论附加资源成功与否都只显示「已完成」，
-  /// 用户会以为封面字幕都下好了。现在如实标出失败的是哪一项。
+  /// 过去无论附加资源成功与否都只显示「已完成」，用户会以为封面字幕都下好了。
+  /// 更糟的是**封装失败**：`_merge` 把原因写进了 `task.error`，但这里只显示
+  /// 「已完成（未合并）」，用户根本不知道该去查什么——只能看到「合并不了」。
+  /// 现在把真实原因顶到标题行上。
   String _completedText(DownloadTask task) {
     final size = formatBytes(task.totalBytes);
+    final error = task.error;
+    // 注意：只有「封装失败」才会带 error。设置里关了自动合并、
+    // 或者只下了封面弹幕，这两种情况 merged 也是 false，但 error 为空。
+    if (!task.merged && error != null && error.isNotEmpty) {
+      return '$error · $size';
+    }
     final extras = task.extrasError;
     if (extras != null && extras.isNotEmpty) {
       return '已完成，但 $extras 未成功 · $size';
     }
-    return task.merged ? '已完成 · $size' : '已完成（未合并）· $size';
+    if (!task.merged) {
+      return '已完成（未合并，可在「工具」里手动合并）· $size';
+    }
+    return '已完成 · $size';
   }
 
   /// 下载来源标签（评审第 20 项）。

@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.0（versionCode 14） |
+| 版本 | v2.0.1（versionCode 15） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,42 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v2.0.1 —— 修复「自动合并与手动合成都失败」
+
+**这是我 v1.8.0 引入的回归，影响所有视频，与你的环境无关。**
+
+v1.8.0 给 MediaMuxer 加了封装后校验（评审第十项），但里面两个检查写成了
+「拿不准就判失败」，而失败时调用方会**把刚封装好的成品删掉**：
+
+1. **用 64 KB 缓冲去读第 0 轨（视频轨）的第一个样本。**
+   视频轨首帧是 IDR 关键帧，1080p 就轻松超过 100 KB、4K 上 MB，
+   `readSampleData` 必然抛 `IllegalArgumentException`，被 catch 吞掉后返回 false。
+2. **`durationUs <= 0` 直接判失败。**
+   但 `MediaExtractor` 是否给 MP4 轨道填 `KEY_DURATION` 依设备实现而异，
+   填不上时恒为 0——把「不知道」当成了「坏了」。
+
+自动合并与工具箱的手动合并走的是同一个 `MediaMuxerHelper.remux`，
+所以两条路一起挂。**请升级到 v2.0.1。**
+
+**修复方式：把「拿不准」和「确证坏了」分开。**
+
+保留真正有价值的检查（轨道数、期望的视频/音频轨是否存在——这条能抓到
+「只搬第一条视频轨导致音频丢失」），去掉会误判的检查：
+
+- 样本探测改为自适应扩容；并且**「缓冲不够」这个异常本身就算作样本存在的证据**
+- 时长只在**确实拿到且为负数**时才怀疑，拿不到不判
+- 失败仍然删产物，但因为剩下的都是确证的检查，这个动作重新变得安全
+
+**顺带修掉一个「看不见原因」的问题**
+
+`_merge` 失败时把原因写进了 `task.error`，但后续状态被置为 `completed`，
+任务卡片只显示「已完成（未合并）」——你只能看到合并不了，看不到为什么。
+现在真实原因会顶到标题行上（例如「封装失败，已保留原始文件，可在工具里重新合并」）。
+设置里关掉自动合并、以及只下封面弹幕这两种「未合并」也换成了更明确的文案。
+
+**写校验的教训**：一个「宁可错杀」的校验，配上一个「失败就删文件」的动作，
+等于把校验的误判率直接放大了成破坏力。校验只该在能确证时否决。
 
 ### v2.0.0 —— 智能下载与媒体工作站
 
@@ -733,7 +769,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.0-arm64-v8a.apk
+adb install -r DownKyi-v2.0.1-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
