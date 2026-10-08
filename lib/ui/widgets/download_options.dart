@@ -129,14 +129,22 @@ class DownloadOptionsPanel extends StatelessWidget {
 
   /// 清晰度标签 + 预估体积（评审第 16 项）。
   /// DASH 拿不到真实总长，这里是按码率 × 时长估算，误差通常在 5% 以内。
+  ///
+  /// ⚠️ 必须算**视频 + 音频**：这里只算视频轨的话，标签会明显小于最终文件，
+  /// 用户会以为「合并把文件撑大了」。杜比视界这类片源常配杜比全景声 / Hi-Res 音轨，
+  /// 一部 30 分钟的视频音轨本身就能有 300 MB 量级，差额非常扎眼。
   String _qualityLabelWithSize(int quality) {
     final base = parse.qualityLabel(quality);
     final dash = parse.dash;
     if (dash == null) return base;
-    final bytes =
-        MediaEstimator.videoBytes(dash, quality, parse.codec, dash.durationMs);
+    final bytes = MediaEstimator.totalBytes(
+      dash,
+      quality: quality,
+      codec: parse.codec,
+      audioId: parse.audioId,
+    );
     if (bytes <= 0) return base;
-    return '$base · ${formatBytes(bytes)}';
+    return '$base · 共 ${formatBytes(bytes)}';
   }
 
   Widget _codecChild() {

@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.3（versionCode 17） |
+| 版本 | v2.0.4（versionCode 18） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,25 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v2.0.4 —— 体积预估改为「视频 + 音频」合计
+
+**这是我在 v2.0.0 埋下的误导。**
+
+v2.0.0 起清晰度选项上会标注预估体积，但那个数字**只算了视频轨**。
+而合并后的成品必然是「视频 + 音轨」——杜比视界这类片源常配杜比全景声 /
+Hi-Res 音轨，一部 30 分钟的视频音轨本身就能到 300 MB 量级。
+
+结果就是：标签显示 387 M，实际文件 700 M，看起来像「合并把文件撑大了」，
+但其实是标签少算了一路。现在改为合计，并在数字前加「共」以示区分：
+
+```
+1080P 高清 · AVC / H.264 · 共 698 MB
+```
+
+顺带说明：v2.0.2 的 `-map 0:v:0 -map 1:a:0` 在数学上**不可能**产出超过两个输入
+之和的文件，所以「体积翻倍」不可能来自轨被复制。封装环节现在也会把
+「视频 + 音频 -> 成品」三个体积写进运行日志，便于随时核对。
 
 ### v2.0.3 —— 修复「杜比视界降级成普通 HDR」与「合并后体积翻倍」
 
@@ -832,7 +851,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.3-arm64-v8a.apk
+adb install -r DownKyi-v2.0.4-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
