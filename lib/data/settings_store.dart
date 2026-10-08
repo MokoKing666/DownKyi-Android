@@ -1,8 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:convert';
+
+import '../bili/subtitles.dart';
 import '../core/constants.dart';
 import '../core/secret_store.dart';
+import '../download/danmaku_writer.dart';
+import '../download/download_rules.dart';
 import '../ui/theme.dart';
 import 'http_client.dart';
 
@@ -34,6 +39,10 @@ class SettingsStore extends ChangeNotifier {
   static const String _kGifFps = 'convert_gif_fps';
   static const String _kSubCheck = 'subscription_check_enabled';
   static const String _kSubInterval = 'subscription_interval_hours';
+  static const String _kPreferenceMode = 'preference_mode';
+  static const String _kSubtitleLangs = 'subtitle_languages';
+  static const String _kDanmakuStyle = 'danmaku_style';
+  static const String _kSmartAuto = 'smart_auto_select';
 
   static const String defaultAria2Url = 'http://127.0.0.1:6800/jsonrpc';
 
@@ -86,6 +95,19 @@ class SettingsStore extends ChangeNotifier {
 
   /// 可选的检查间隔
   static const List<int> subscriptionIntervalOptions = <int>[1, 3, 6, 12, 24];
+
+  /// 下载偏好模式（评审第 15 项「智能下载」）
+  PreferenceMode preferenceMode = PreferenceMode.bestQuality;
+
+  /// 是否在打开解析结果时按偏好模式自动选档。
+  /// 关掉就退化成「记住上次的选择」，给喜欢手动的人留一条路。
+  bool smartAutoSelect = true;
+
+  /// 要下载的字幕语言（评审第 21 项）。空表示不下字幕。
+  List<String> subtitleLanguages = const <String>[SubtitleLanguage.defaultCode];
+
+  /// 弹幕 ASS 样式（评审第 22 项）
+  DanmakuStyle danmakuStyle = const DanmakuStyle();
 
   bool _loaded = false;
 
@@ -141,6 +163,11 @@ class SettingsStore extends ChangeNotifier {
     gifFps = prefs.getInt(_kGifFps) ?? 12;
     subscriptionCheckEnabled = prefs.getBool(_kSubCheck) ?? true;
     subscriptionIntervalHours = prefs.getInt(_kSubInterval) ?? 6;
+    preferenceMode = PreferenceMode.fromName(prefs.getString(_kPreferenceMode));
+    smartAutoSelect = prefs.getBool(_kSmartAuto) ?? true;
+    subtitleLanguages =
+        _decodeSubtitleLanguages(prefs.getString(_kSubtitleLangs));
+    danmakuStyle = _decodeDanmakuStyle(prefs.getString(_kDanmakuStyle));
 
     final savedFormat = prefs.getString(_kDanmaku) ?? DanmakuFormat.ass.name;
     danmakuFormat = DanmakuFormat.values.firstWhere(
@@ -187,6 +214,10 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setInt(_kGifFps, gifFps);
     await prefs.setBool(_kSubCheck, subscriptionCheckEnabled);
     await prefs.setInt(_kSubInterval, subscriptionIntervalHours);
+    await prefs.setString(_kPreferenceMode, preferenceMode.name);
+    await prefs.setBool(_kSmartAuto, smartAutoSelect);
+    await prefs.setString(_kSubtitleLangs, jsonEncode(subtitleLanguages));
+    await prefs.setString(_kDanmakuStyle, jsonEncode(danmakuStyle.toJson()));
     await _saveSecrets(prefs);
   }
 
@@ -250,4 +281,39 @@ class SettingsStore extends ChangeNotifier {
         13 => 'av1',
         _ => 'avc',
       };
+
+  /// 偏好模式的说明文案，给设置页直接用
+  String get preferenceModeDescription => preferenceMode.description;
+
+  /// 字幕语言的可读清单，例如「简体中文 / English」
+  String get subtitleSummary => subtitleLanguages.isEmpty
+      ? '不下字幕'
+      : subtitleLanguages.map(SubtitleLanguage.labelOf).join(' / ');
+
+  static List<String> _decodeSubtitleLanguages(String? raw) {
+    if (raw == null || raw.isEmpty)
+      return const <String>[SubtitleLanguage.defaultCode];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((item) => '$item').toList(growable: false);
+      }
+    } catch (_) {
+      // 配置坏了不该让 App 起不来
+    }
+    return const <String>[SubtitleLanguage.defaultCode];
+  }
+
+  static DanmakuStyle _decodeDanmakuStyle(String? raw) {
+    if (raw == null || raw.isEmpty) return const DanmakuStyle();
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return DanmakuStyle.fromJson(decoded.cast<String, Object?>());
+      }
+    } catch (_) {
+      // 同上
+    }
+    return const DanmakuStyle();
+  }
 }

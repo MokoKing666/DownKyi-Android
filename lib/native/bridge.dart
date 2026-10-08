@@ -265,4 +265,16 @@ class NativeBridge {
       AppLog.e('Native', '清空加密存储失败', error);
     }
   }
+
+  /// 硬件解码能力探测（供选档时给建议，见 DecoderCapabilities.kt）。
+  /// 失败返回 null，调用方按「未知」处理，不影响任何下载功能。
+  static Future<Map<Object?, Object?>?> decoderCapabilities() async {
+    try {
+      return await _channel
+          .invokeMethod<Map<Object?, Object?>>('decoderCapabilities');
+    } catch (error) {
+      AppLog.e('Native', '读取解码能力失败', error);
+      return null;
+    }
+  }
 }

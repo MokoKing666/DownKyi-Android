@@ -4,6 +4,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../../core/formatter.dart';
 import '../../data/download_task.dart';
 import '../../download/download_manager.dart';
+import '../../download/download_rules.dart';
 import '../td.dart';
 
 /// 下载任务卡片
@@ -65,11 +66,18 @@ class TaskTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      task.displaySubTitle,
-                      style: TdText.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: <Widget>[
+                        _sourceBadge(),
+                        Expanded(
+                          child: Text(
+                            task.displaySubTitle,
+                            style: TdText.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -132,6 +140,33 @@ class TaskTile extends StatelessWidget {
       return '已完成，但 $extras 未成功 · $size';
     }
     return task.merged ? '已完成 · $size' : '已完成（未合并）· $size';
+  }
+
+  /// 下载来源标签（评审第 20 项）。
+  ///
+  /// 接上 NAS / 电脑的 aria2 之后，任务列表里会同时存在「本机在下」和
+  /// 「远程在下」两种任务，速度与进度的含义完全不同，必须能一眼分辨。
+  /// 本机任务不加标签，避免每条都挂个「本机」把界面弄脏。
+  Widget _sourceBadge() {
+    final source = TaskSources.of(task, manager.settings.aria2RpcUrl);
+    if (source == TaskSource.local) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(right: TdSpacer.xs),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: TdPalette.gray1,
+          borderRadius: BorderRadius.circular(TdRadius.medium),
+        ),
+        child: Text(
+          source.label,
+          style: TdText.bodySmall.copyWith(
+            color: source.isRemote ? TdPalette.brand : TdPalette.textSecondary,
+            fontSize: 11,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildActions(BuildContext context) {

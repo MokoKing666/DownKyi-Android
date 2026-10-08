@@ -12,6 +12,7 @@ import '../bili/bili_api.dart';
 import '../data/download_task.dart';
 import '../data/http_client.dart';
 import '../bili/models.dart';
+import '../bili/subtitles.dart';
 import '../data/settings_store.dart';
 import '../data/task_dao.dart';
 import '../native/bridge.dart';
@@ -151,7 +152,9 @@ class DownloadManager extends ChangeNotifier {
       audioId: audioId,
       flags: effectiveFlags,
       danmakuFormat: effectiveDanmaku,
-      subtitleLanguage: subtitleLanguagePreference,
+      // 字幕语言同样影响最终产物（下中英双字和只下中文是两套文件），
+      // 必须进唯一性判定——否则改了字幕语言反而会被「任务已存在」挡住。
+      subtitleLanguage: settings.subtitleLanguages.join('+'),
     );
     if (tasks
         .any((task) => task.key == key && task.status != TaskStatus.failed)) {
@@ -797,7 +800,8 @@ class DownloadManager extends ChangeNotifier {
             await api.danmaku(cid: task.cid, durationMs: task.durationMs);
         final content = switch (task.danmakuFormat) {
           DanmakuFormat.xml => DanmakuWriter.toXml(items),
-          DanmakuFormat.ass => DanmakuWriter.toAss(items, title: task.title),
+          DanmakuFormat.ass => DanmakuWriter.toAss(items,
+              title: task.title, style: settings.danmakuStyle),
           DanmakuFormat.txt => DanmakuWriter.toText(items),
           DanmakuFormat.none => '',
         };
@@ -820,19 +824,30 @@ class DownloadManager extends ChangeNotifier {
       try {
         final subtitles = await api.subtitles(
             cid: task.cid, bvid: task.bvid, epId: task.epId);
-        if (subtitles.isNotEmpty) {
-          final chosen = subtitles.firstWhere(
-            (item) => item.lan.toLowerCase().contains('zh'),
-            orElse: () => subtitles.first,
-          );
-          final srt = await api.subtitleToSrt(chosen.url);
-          if (srt.isNotEmpty) {
-            final local = '$base.srt';
+        // 多语言：按设置里的语言列表逐个落盘，文件名带语言后缀。
+        // 之前只挑「含 zh 的第一条」并固定写成 video.srt，想要中英双字是做不到的。
+        final chosen =
+            SubtitleLanguage.select(subtitles, settings.subtitleLanguages);
+        if (chosen.isEmpty && subtitles.isNotEmpty) {
+          // 有字幕但没有用户要的语言，明确报出来而不是静默成功
+          failed.add('字幕（没有 ${settings.subtitleSummary}）');
+        }
+        for (final item in chosen) {
+          final code = SubtitleLanguage.normalize(item.lan);
+          final suffix = SubtitleLanguage.fileSuffix(code);
+          try {
+            final srt = await api.subtitleToSrt(item.url);
+            if (srt.isEmpty) continue;
+            final local = '$base.$suffix.srt';
             await File(local).writeAsString(srt, flush: true);
             await _placeFile(
-                localPath: local,
-                fileName: '${task.fileName}.srt',
-                toGallery: toGallery);
+              localPath: local,
+              fileName: '${task.fileName}.$suffix.srt',
+              toGallery: toGallery,
+            );
+          } catch (error) {
+            AppLog.e('Task', '字幕（$code）下载失败', error);
+            failed.add('字幕·${SubtitleLanguage.labelOf(code)}');
           }
         }
       } catch (error) {

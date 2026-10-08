@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
+import '../../bili/subtitles.dart';
 import '../../core/constants.dart';
 import '../../core/logger.dart';
 import '../../data/http_client.dart';
 import '../../data/settings_store.dart';
 import '../../download/download_manager.dart';
+import '../../download/download_rules.dart';
 import '../../subscription/subscription_scheduler.dart';
 import '../td.dart';
 import '../theme.dart';
@@ -243,6 +245,69 @@ class SettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: TdSpacer.small),
 
+          // ---------------- 下载偏好（智能选档）----------------
+          TdSection(
+            title: '下载偏好',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TdChoiceGroup<PreferenceMode>(
+                  items: PreferenceMode.values,
+                  selected: settings.preferenceMode,
+                  labelBuilder: (value) => value.label,
+                  onSelect: (value) =>
+                      settings.update(() => settings.preferenceMode = value),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  settings.preferenceMode.description,
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '打开解析结果时会按偏好自动选好清晰度 / 编码 / 音轨，之后也可以手动改。'
+                  '选档时会给出手势体积预估与本机解码能力提示。',
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 字幕语言 ----------------
+          TdSection(
+            title: '字幕',
+            child: Column(
+              children: <Widget>[
+                TDCell(
+                  title: '下载语言',
+                  description: settings.subtitleSummary,
+                  arrow: true,
+                  onClick: (cell) => _pickSubtitleLanguages(context, settings),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 弹幕样式 ----------------
+          TdSection(
+            title: '弹幕样式',
+            child: Column(
+              children: <Widget>[
+                TDCell(
+                  title: 'ASS 样式',
+                  description: settings.danmakuStyle.summary,
+                  arrow: true,
+                  onClick: (cell) => _editDanmakuStyle(context, settings),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
           // ---------------- 默认清晰度 ----------------
           TdSection(
             title: '默认清晰度',
@@ -459,6 +524,201 @@ class SettingsPage extends StatelessWidget {
   }
 
   /// 通用文本编辑弹窗
+  /// 字幕语言多选。
+  ///
+  /// 用「选语言」而不是「选一条字幕」：用户关心的是「我要中英双语」，
+  /// 而具体挑哪条（人工 CC 还是 AI 字幕）是 SubtitleLanguage.select 的事。
+  Future<void> _pickSubtitleLanguages(
+    BuildContext context,
+    SettingsStore settings,
+  ) async {
+    final selected = <String>{...settings.subtitleLanguages};
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: TdPalette.container,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(TdSpacer.medium),
+                child: Text('下载哪些语言的字幕', style: TdText.titleSmall),
+              ),
+              for (final language in SubtitleLanguage.all)
+                TdCheckRow(
+                  title: language.label,
+                  value: selected.contains(language.code),
+                  onChanged: (value) => setSheetState(() {
+                    if (value) {
+                      selected.add(language.code);
+                    } else {
+                      selected.remove(language.code);
+                    }
+                  }),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(TdSpacer.medium),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(true),
+                      child: const Text('确定'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await settings.update(() {
+      settings.subtitleLanguages = selected.toList();
+      // 选了语言等于要下字幕，顺手把开关打开，少一步操作
+      settings.downloadSubtitle = selected.isNotEmpty;
+    });
+  }
+
+  /// 弹幕 ASS 样式。
+  ///
+  /// 之前字号 / 时长 / 占屏比例全是写死的，手机上 40 号字偏小、4K 片源里又铺满整屏。
+  /// 现在这几项都能调，并且实时给出摘要。
+  Future<void> _editDanmakuStyle(
+    BuildContext context,
+    SettingsStore settings,
+  ) async {
+    var style = settings.danmakuStyle;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: TdPalette.container,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(TdSpacer.medium),
+                  child: Text('弹幕 ASS 样式', style: TdText.titleSmall),
+                ),
+                _styleGroup<double>(
+                  '字号',
+                  const <double>[0.6, 0.8, 1.0, 1.2, 1.5],
+                  style.fontScale,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(fontScale: value)),
+                  (value) => '${(value * 100).round()}%',
+                ),
+                _styleGroup<double>(
+                  '不透明度',
+                  const <double>[0.5, 0.7, 0.85, 1.0],
+                  style.opacity,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(opacity: value)),
+                  (value) => '${(value * 100).round()}%',
+                ),
+                _styleGroup<int>(
+                  '滚动时长',
+                  const <int>[4000, 6000, 8000, 12000],
+                  style.scrollDurationMs,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(scrollDurationMs: value)),
+                  (value) => '${value ~/ 1000} 秒',
+                ),
+                _styleGroup<double>(
+                  '占屏比例',
+                  const <double>[0.4, 0.55, 0.75, 1.0],
+                  style.laneRatio,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(laneRatio: value)),
+                  (value) => '${(value * 100).round()}%',
+                ),
+                TdSwitchRow(
+                  title: '滚动弹幕',
+                  value: style.enableScroll,
+                  onChanged: (value) => setSheetState(
+                      () => style = style.copyWith(enableScroll: value)),
+                ),
+                TdSwitchRow(
+                  title: '顶部弹幕',
+                  value: style.enableTop,
+                  onChanged: (value) => setSheetState(
+                      () => style = style.copyWith(enableTop: value)),
+                ),
+                TdSwitchRow(
+                  title: '底部弹幕',
+                  value: style.enableBottom,
+                  onChanged: (value) => setSheetState(
+                      () => style = style.copyWith(enableBottom: value)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(TdSpacer.medium),
+                  child: Text(
+                    style.summary,
+                    style: TdText.bodySmall
+                        .copyWith(color: TdPalette.textPlaceholder),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      TdSpacer.medium, 0, TdSpacer.medium, TdSpacer.medium),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      TextButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('取消'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(true),
+                        child: const Text('确定'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await settings.update(() => settings.danmakuStyle = style);
+  }
+
+  Widget _styleGroup<T>(
+    String title,
+    List<T> items,
+    T selected,
+    ValueChanged<T> onSelect,
+    String Function(T value) label,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: TdText.titleSmall),
+          const SizedBox(height: TdSpacer.xs),
+          TdChoiceGroup<T>(
+            items: items,
+            selected: selected,
+            labelBuilder: label,
+            onSelect: onSelect,
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _editText(
     BuildContext context, {
     required String title,

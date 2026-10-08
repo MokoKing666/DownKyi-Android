@@ -176,6 +176,11 @@ object NativeBridge {
                 result.success(true)
             }
 
+            // 硬件解码能力探测，用于在选档时给出推荐（见 DecoderCapabilities.kt）
+            "decoderCapabilities" -> {
+                submit(activity, result) { DecoderCapabilities.probe() }
+            }
+
             else -> result.notImplemented()
         }
     }

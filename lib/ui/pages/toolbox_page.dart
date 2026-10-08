@@ -245,6 +245,14 @@ class ToolboxPage extends StatelessWidget {
     required String source,
     required String baseName,
   }) async {
+    // 精简包排除了 FFmpeg 原生库（见 tools/build_lite.ps1）。
+    // 在这里统一拦一次：否则会崩在「找不到 native 库」上，
+    // 那个报错对用户完全没有意义。
+    final unavailable = BuildFlavor.ffmpegUnavailableReason;
+    if (unavailable != null) {
+      tdToast(context, unavailable);
+      return;
+    }
     final manager = context.read<DownloadManager>();
     final workDir = await manager.ensureDownloadDir();
     final convertDir = Directory('$workDir/.convert');

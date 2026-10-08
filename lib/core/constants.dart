@@ -4,9 +4,29 @@ library;
 class AppInfo {
   static const String name = '哔哩哔哩下载姬';
   static const String englishName = 'DownKyi';
-  static const String version = '1.8.2';
+  static const String version = '2.0.0';
   static const String disclaimer = '本应用仅提供视频解析与本地下载能力，不提供任何内容存储服务。'
       '所有内容版权归原作者所有，仅供个人学习交流，请勿用于商业用途，并支持原始发布者。';
+}
+
+/// 构建变体（评审第 27 项）。
+///
+/// 精简包在打包时排除了 FFmpeg 原生库（见 `android/app/build.gradle.kts`
+/// 与 `tools/build_lite.ps1`）。Dart 侧必须知道这件事——否则用户点了「格式转换」
+/// 会直接崩在「找不到 native 库」上，而不是看到一句解释。
+class BuildFlavor {
+  BuildFlavor._();
+
+  /// 由 `--dart-define=DOWNKYI_LITE=true` 注入；默认是完整包
+  static const bool lite = bool.fromEnvironment('DOWNKYI_LITE');
+
+  static bool get supportsFfmpeg => !lite;
+
+  /// 精简包缺少 FFmpeg 时的提示语；完整包返回 null
+  static String? get ffmpegUnavailableReason => lite
+      ? '当前是精简包（不含 FFmpeg），格式转换 / GIF / 转码不可用。'
+          '下载、合并、相册落盘、弹幕与字幕不受影响。'
+      : null;
 }
 
 class BiliConst {
