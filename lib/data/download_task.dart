@@ -63,6 +63,7 @@ class DownloadTask {
     this.aria2Gid,
     this.exported = false,
     this.exportedPath,
+    this.extrasError,
   });
 
   int id;
@@ -110,6 +111,20 @@ class DownloadTask {
 
   /// 导出后系统媒体库的位置（content uri 或公共路径）
   String? exportedPath;
+
+  /// 附加资源（封面 / 弹幕 / 字幕）里失败的项目，顿号分隔。
+  ///
+  /// 视频本体成功但某一项附加资源失败时，过去仍然只显示「已完成」，
+  /// 用户以为一切正常。现在把失败项记下来并显示成「已完成（弹幕未成功）」。
+  String? extrasError;
+
+  /// 视频本体完成，但附加资源有失败项——UI 应显示为「有警告的完成」。
+  ///
+  /// 没有新增 `TaskStatus` 枚举值：状态机在 12 处被引用（已完成列表、计数、
+  /// 缓存保护规则等），新增枚举值需要同步改动全部调用点，漏一处就会出现
+  /// 任务不显示「已完成」或缓存误删。用派生态表达同样的语义更安全。
+  bool get completedWithWarnings =>
+      status == TaskStatus.completed && (extrasError?.isNotEmpty ?? false);
 
   bool get wantVideo => flags & DownloadFlags.video != 0;
   bool get wantAudio => flags & DownloadFlags.audio != 0;
@@ -179,6 +194,7 @@ class DownloadTask {
         'aria2_gid': aria2Gid,
         'exported': exported ? 1 : 0,
         'exported_path': exportedPath,
+        'extras_error': extrasError,
       };
 
   factory DownloadTask.fromMap(Map<String, Object?> map) => DownloadTask(
@@ -218,5 +234,6 @@ class DownloadTask {
         aria2Gid: map['aria2_gid'] as String?,
         exported: ((map['exported'] as int?) ?? 0) == 1,
         exportedPath: map['exported_path'] as String?,
+        extrasError: map['extras_error'] as String?,
       );
 }

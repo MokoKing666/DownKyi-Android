@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/constants.dart';
@@ -127,7 +129,21 @@ class DownloadManager extends ChangeNotifier {
             (settings.downloadDanmaku ? DownloadFlags.danmaku : 0) |
             (settings.downloadSubtitle ? DownloadFlags.subtitle : 0));
 
-    final key = '${item.bvid.isEmpty ? 'ep${item.epId}' : item.bvid}_${item.cid}_${quality}_$effectiveFlags';
+    // 所有「决定最终文件内容」的参数都参与唯一性判定。
+    // 早先只用 bvid/cid/quality/flags，于是同清晰度不同编码会被判成同一个任务
+    // 而互相顶掉——4K AVC 与 4K HEVC 本该是两个可以并存的任务。
+    final effectiveDanmaku = danmakuFormat ?? settings.danmakuFormat;
+    final key = buildTaskKey(
+      bvid: item.bvid,
+      cid: item.cid,
+      epId: item.epId,
+      quality: quality,
+      codec: codec,
+      audioId: audioId,
+      flags: effectiveFlags,
+      danmakuFormat: effectiveDanmaku,
+      subtitleLanguage: subtitleLanguagePreference,
+    );
     if (tasks.any((task) => task.key == key && task.status != TaskStatus.failed)) {
       AppLog.d('Task', '任务已存在，跳过：$key');
       return null;
@@ -149,7 +165,7 @@ class DownloadManager extends ChangeNotifier {
       audioId: audioId,
       codec: codec,
       flags: effectiveFlags,
-      danmakuFormat: danmakuFormat ?? settings.danmakuFormat,
+      danmakuFormat: effectiveDanmaku,
       createdAt: DateTime.now().millisecondsSinceEpoch,
     );
     task.fileName = buildFileName(task);
@@ -160,13 +176,74 @@ class DownloadManager extends ChangeNotifier {
     return task;
   }
 
+  /// 字幕语言偏好。字幕多语言选择属于 v1.9，这里先固定为中文。
+  static const String subtitleLanguagePreference = 'zh';
+
+  /// 任务唯一标识。
+  ///
+  /// 用 SHA-256 把全部「影响文件内容」的参数压成定长串：参数从 4 个膨胀到 9 个后，
+  /// 拼接式 key 会又长又难读，而且任何一处顺序调整都会让历史任务的 key 变化。
+  ///
+  /// 注意：本版把 `codec` / `audioId` / 弹幕格式纳入了 key，
+  /// **旧版本创建的同内容任务 key 与新格式不同**，会被视为两条任务（一次性影响）。
+  static String buildTaskKey({
+    required String bvid,
+    required int cid,
+    required int? epId,
+    required int quality,
+    required String codec,
+    required int? audioId,
+    required int flags,
+    required DanmakuFormat danmakuFormat,
+    required String subtitleLanguage,
+  }) {
+    final identity = <String>[
+      bvid.isEmpty ? 'ep${epId ?? 0}' : bvid,
+      '$cid',
+      '$quality',
+      codec,
+      audioId?.toString() ?? 'auto',
+      '$flags',
+      danmakuFormat.name,
+      subtitleLanguage,
+    ].join('|');
+    return sha256.convert(utf8.encode(identity)).toString().substring(0, 32);
+  }
+
   String buildFileName(DownloadTask task) {
     var name = settings.fileNameTemplate
         .replaceAll('{title}', task.title)
         .replaceAll('{quality}', task.qualityName.isEmpty ? '${task.quality}' : task.qualityName)
-        .replaceAll('{owner}', task.owner);
+        .replaceAll('{owner}', task.owner)
+        .replaceAll('{bvid}', task.bvid)
+        .replaceAll('{cid}', '${task.cid}')
+        .replaceAll('{codec}', task.codec.toUpperCase())
+        .replaceAll('{date}', _formatDate(task.createdAt));
     if (name.trim().isEmpty) name = task.title;
-    return sanitizeFileName(name);
+    return _dedupeFileName(sanitizeFileName(name));
+  }
+
+  /// 文件名查重。
+  ///
+  /// 批量下载时标题极易重复（同系列、同名分 P），默认模板又只有 `{title}`，
+  /// 两三个任务会写进同一个文件互相覆盖。这里在已有任务里查重并追加 `(1)`、`(2)`。
+  String _dedupeFileName(String base) {
+    final taken = <String>{
+      for (final task in tasks)
+        if (task.fileName.isNotEmpty) task.fileName,
+    };
+    if (!taken.contains(base)) return base;
+    for (var index = 1; index < 1000; index++) {
+      final candidate = '$base ($index)';
+      if (!taken.contains(candidate)) return candidate;
+    }
+    return '$base (${DateTime.now().millisecondsSinceEpoch})';
+  }
+
+  static String _formatDate(int milliseconds) {
+    final date = DateTime.fromMillisecondsSinceEpoch(milliseconds);
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${date.year}${two(date.month)}${two(date.day)}';
   }
 
   void _pump() {
@@ -420,7 +497,8 @@ class DownloadManager extends ChangeNotifier {
 
   /// 附加资源 + 合并 + 收尾
   Future<void> _finishTask(DownloadTask task, String dir) async {
-    await _downloadExtras(task, dir);
+    final failedExtras = await _downloadExtras(task, dir);
+    task.extrasError = failedExtras.isEmpty ? null : failedExtras.join('、');
 
     if (task.videoPath == null && task.audioPath == null) {
       // 只勾了封面 / 弹幕 / 字幕：没有媒体流可合并，直接收尾
@@ -586,6 +664,9 @@ class DownloadManager extends ChangeNotifier {
       segmentCount: settings.segmentConcurrency.clamp(1, 16),
       concurrency: settings.segmentConcurrency.clamp(1, 16),
       resumeState: resumeState,
+      // B 站播放地址有有效期。403 / 404 时重新解析 playurl 换新地址，
+      // 下载器会保留已完成的 part 从断点继续，而不是反复重试同一个失效地址。
+      refreshUrl: () => _refreshStreamUrl(job.task, streamKey),
     );
     await downloader.download(
       onTotal: (total) {
@@ -601,6 +682,33 @@ class DownloadManager extends ChangeNotifier {
       token: job.token,
     );
     _persistProgress(job, force: true);
+  }
+
+  /// 重新解析播放地址，给下载器在 403 / 404 时换用新地址。
+  ///
+  /// 只换 URL，**不动已下载的 part**——下载器内部会沿用它们从断点续传继续，
+  /// 所以「下到 18 GB 地址过期」不会退回去重下。
+  Future<String?> _refreshStreamUrl(DownloadTask task, String streamKey) async {
+    AppLog.d('Download', '刷新播放地址：${task.title}（$streamKey）');
+    if (streamKey == 'direct') {
+      return api.plainUrl(
+        btype: task.btype,
+        cid: task.cid,
+        bvid: task.bvid,
+        epId: task.epId,
+        quality: task.quality,
+      );
+    }
+    final dash = await api.playUrl(
+      btype: task.btype,
+      cid: task.cid,
+      bvid: task.bvid,
+      epId: task.epId,
+      quality: task.quality,
+    );
+    return streamKey == 'audio'
+        ? dash.pickAudio(task.audioId)?.url
+        : dash.pickVideo(task.quality, task.codec)?.url;
   }
 
   /// 没有 DASH 时的直链下载
@@ -627,6 +735,7 @@ class DownloadManager extends ChangeNotifier {
       filePath: tmp,
       segmentCount: settings.segmentConcurrency.clamp(1, 16),
       concurrency: settings.segmentConcurrency.clamp(1, 16),
+      refreshUrl: () => _refreshStreamUrl(task, 'direct'),
     );
     await downloader.download(
       onTotal: (total) {
@@ -647,9 +756,14 @@ class DownloadManager extends ChangeNotifier {
     await _finishTask(task, dir);
   }
 
-  Future<void> _downloadExtras(DownloadTask task, String dir) async {
+  /// 下载封面 / 弹幕 / 字幕，返回失败的项目名。
+  ///
+  /// 单项失败不影响视频本体，但必须把失败项报上去——过去只写日志，
+  /// 任务仍然显示「已完成」，用户以为一切正常。
+  Future<List<String>> _downloadExtras(DownloadTask task, String dir) async {
     final base = '$dir/${task.fileName}';
     final toGallery = settings.saveToGallery;
+    final failed = <String>[];
 
     if (task.wantCover && task.cover.isNotEmpty) {
       try {
@@ -659,6 +773,7 @@ class DownloadManager extends ChangeNotifier {
         await _placeFile(localPath: local, fileName: '${task.fileName}.jpg', toGallery: toGallery);
       } catch (error) {
         AppLog.e('Task', '封面下载失败', error);
+        failed.add('封面');
       }
     }
 
@@ -682,6 +797,7 @@ class DownloadManager extends ChangeNotifier {
         }
       } catch (error) {
         AppLog.e('Task', '弹幕下载失败', error);
+        failed.add('弹幕');
       }
     }
 
@@ -702,8 +818,11 @@ class DownloadManager extends ChangeNotifier {
         }
       } catch (error) {
         AppLog.e('Task', '字幕下载失败', error);
+        failed.add('字幕');
       }
     }
+
+    return failed;
   }
 
   Future<void> _merge(DownloadTask task, String dir) async {

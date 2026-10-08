@@ -17,7 +17,7 @@ class TaskDao {
     final path = '${await getDatabasesPath()}/downkyi.db';
     final database = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE download_task(
@@ -53,7 +53,8 @@ class TaskDao {
             merged INTEGER,
             aria2_gid TEXT,
             exported INTEGER,
-            exported_path TEXT
+            exported_path TEXT,
+            extras_error TEXT
           )
         ''');
         await db.execute('CREATE UNIQUE INDEX idx_task_key ON download_task(task_key)');
@@ -65,6 +66,10 @@ class TaskDao {
           await db.execute('ALTER TABLE download_task ADD COLUMN aria2_gid TEXT');
           await db.execute('ALTER TABLE download_task ADD COLUMN exported INTEGER');
           await db.execute('ALTER TABLE download_task ADD COLUMN exported_path TEXT');
+        }
+        // v3：附加资源（封面 / 弹幕 / 字幕）的失败项
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE download_task ADD COLUMN extras_error TEXT');
         }
       },
     );

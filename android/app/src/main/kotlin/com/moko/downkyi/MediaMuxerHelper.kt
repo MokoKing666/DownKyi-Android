@@ -12,9 +12,8 @@ import java.nio.ByteBuffer
  * 用系统 MediaMuxer 把 B 站的 m4s 重新封装为可正常播放的 mp4。
  *
  * 关键设计：**输入文件里的所有音视频轨都会被原样搬运**，而不是只取第一条视频轨。
- * 这一点很关键 ——
- * - durl 直链下载到的是一个完整 mp4，音视频在同一个文件里；
- *   若只 selectTrack 第一条视频轨，音频会被静默丢掉（表现为「合并出来的视频没声音」）；
+ * - durl 直链下载到的是一个完整 mp4，音视频在同一个文件里；若只 selectTrack
+ *   第一条视频轨，音频会被静默丢掉（表现为「合并出来的视频没声音」）；
  * - 单独下载音频时，输出应当是 m4a，不能因为没有视频轨就整体失败；
  * - 视频 m4s + 音频 m4s 两个文件时，两条轨都会被搬到同一个 mp4 里。
  *
@@ -22,8 +21,11 @@ import java.nio.ByteBuffer
  */
 object MediaMuxerHelper {
 
-    /** 单帧上限 4MB：1MB 装不下 4K 关键帧，readSampleData 会直接抛异常 */
-    private const val BUFFER_SIZE = 4 shl 20
+    /** 单帧缓冲初始 4MB */
+    private const val INITIAL_BUFFER_SIZE = 4 shl 20
+
+    /** 动态扩容上限 64MB，避免极端 8K 关键帧把内存吃穿 */
+    private const val MAX_BUFFER_SIZE = 64 shl 20
 
     /**
      * MediaMuxer **从 Android 7.1（API 25 / Nougat MR1）起才支持把 B 帧封装进 MP4**。
@@ -40,6 +42,8 @@ object MediaMuxerHelper {
     /** 一条待搬运的轨道：(所属输入, 输入轨下标) -> 输出轨下标 */
     private class TrackRef(val extractor: MediaExtractor, val source: Int) {
         var target: Int = -1
+        var isVideo: Boolean = false
+        var isAudio: Boolean = false
     }
 
     fun remux(videoPath: String?, audioPath: String?, outputPath: String): Boolean {
@@ -51,6 +55,7 @@ object MediaMuxerHelper {
 
         val extractors = mutableListOf<MediaExtractor>()
         var muxer: MediaMuxer? = null
+        var muxerStopped = false
         try {
             val refs = mutableListOf<TrackRef>()
             for (path in inputs) {
@@ -63,7 +68,10 @@ object MediaMuxerHelper {
                         if (mime == null) continue
                         if (!mime.startsWith("video/") && !mime.startsWith("audio/")) continue
                         extractor.selectTrack(index)
-                        refs.add(TrackRef(extractor, index))
+                        val ref = TrackRef(extractor, index)
+                        ref.isVideo = mime.startsWith("video/")
+                        ref.isAudio = mime.startsWith("audio/")
+                        refs.add(ref)
                         accepted++
                     }
                     if (accepted > 0) {
@@ -71,7 +79,7 @@ object MediaMuxerHelper {
                     } else {
                         extractor.release()
                     }
-                } catch (error: Throwable) {
+                } catch (_: Throwable) {
                     try {
                         extractor.release()
                     } catch (_: Throwable) {
@@ -81,6 +89,9 @@ object MediaMuxerHelper {
             }
             if (refs.isEmpty()) return false
 
+            val expectVideo = refs.any { it.isVideo }
+            val expectAudio = refs.any { it.isAudio }
+
             File(outputPath).parentFile?.let { if (!it.exists()) it.mkdirs() }
             muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             for (ref in refs) {
@@ -88,7 +99,7 @@ object MediaMuxerHelper {
             }
             muxer.start()
 
-            val buffer = ByteBuffer.allocateDirect(BUFFER_SIZE)
+            var buffer = ByteBuffer.allocateDirect(INITIAL_BUFFER_SIZE)
             val info = MediaCodec.BufferInfo()
             val finished = BooleanArray(refs.size)
             val lastWritten = LongArray(refs.size) { Long.MIN_VALUE }
@@ -119,7 +130,18 @@ object MediaMuxerHelper {
 
                 val ref = refs[pick]
                 buffer.clear()
-                val size = ref.extractor.readSampleData(buffer, 0)
+                val size: Int
+                try {
+                    size = ref.extractor.readSampleData(buffer, 0)
+                } catch (tooSmall: IllegalArgumentException) {
+                    // 极端 4K/8K 关键帧可能超过当前缓冲，按倍扩容后重试同一个样本
+                    // （此时还没 advance，extractor 仍停在这一帧）
+                    val current = buffer.capacity()
+                    if (current >= MAX_BUFFER_SIZE) throw tooSmall
+                    val grown = minOf(current * 2, MAX_BUFFER_SIZE)
+                    buffer = ByteBuffer.allocateDirect(grown)
+                    continue
+                }
                 if (size < 0) {
                     finished[pick] = true
                     continue
@@ -138,20 +160,25 @@ object MediaMuxerHelper {
                 muxer.writeSampleData(ref.target, buffer, info)
                 ref.extractor.advance()
             }
+
+            // 必须先 stop() 写出 moov，校验才有意义
+            muxer.stop()
+            muxerStopped = true
+
+            // MediaMuxer 返回成功 ≠ 文件一定能播，这里再做一次轻量校验
+            if (!verifyOutput(outputPath, expectVideo, expectAudio)) {
+                File(outputPath).delete()
+                return false
+            }
             return true
         } catch (_: Throwable) {
             try {
-                File(outputPath).delete()
+                if (!muxerStopped) File(outputPath).delete()
             } catch (_: Throwable) {
                 // 忽略
             }
             return false
         } finally {
-            try {
-                muxer?.stop()
-            } catch (_: Throwable) {
-                // 忽略
-            }
             try {
                 muxer?.release()
             } catch (_: Throwable) {
@@ -163,6 +190,53 @@ object MediaMuxerHelper {
                 } catch (_: Throwable) {
                     // 忽略
                 }
+            }
+        }
+    }
+
+    /**
+     * 封装后的轻量校验。
+     *
+     * MediaMuxer 返回成功并不代表文件可播放——轨道缺失、时长为 0、
+     * 或根本读不出样本的情况都可能出现，而这些文件交到用户手里就是「下坏了」。
+     * 校验失败时调用方会删掉产物，让上层保留原始分片并提示「重新合并」。
+     */
+    private fun verifyOutput(path: String, expectVideo: Boolean, expectAudio: Boolean): Boolean {
+        val file = File(path)
+        if (!file.exists() || file.length() < 1024) return false
+
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(path)
+            if (extractor.trackCount <= 0) return false
+
+            var hasVideo = false
+            var hasAudio = false
+            var durationUs = 0L
+            for (index in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(index)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
+                if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                    durationUs = maxOf(durationUs, format.getLong(MediaFormat.KEY_DURATION))
+                }
+                if (mime.startsWith("video/")) hasVideo = true
+                if (mime.startsWith("audio/")) hasAudio = true
+            }
+            if (expectVideo && !hasVideo) return false
+            if (expectAudio && !hasAudio) return false
+            if (durationUs <= 0) return false
+
+            // 至少能读出一个样本
+            extractor.selectTrack(0)
+            val probe = ByteBuffer.allocateDirect(1 shl 16)
+            extractor.readSampleData(probe, 0) >= 0
+        } catch (_: Throwable) {
+            false
+        } finally {
+            try {
+                extractor.release()
+            } catch (_: Throwable) {
+                // 忽略
             }
         }
     }

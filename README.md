@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.7.0（versionCode 10） |
+| 版本 | v1.8.0（versionCode 11） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,85 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.8.0 —— 稳定性专项（技术评审第一阶段）
+
+这一版不加新功能，只解决「文件损坏但 UI 显示成功」这一类问题。
+
+**P0 · HTTP Range 严格校验**（`segment_downloader.dart`）
+
+过去 `206` 与 `200` 都被无条件接受。问题在于：**服务端忽略 Range 返回的 200 是完整文件**，
+把它追加进 `.partN` 会直接产出损坏文件。现在：
+
+- `206`：必须带 `Content-Range`，且起点等于请求起点、终点不越界、总长与探测一致，否则报错；
+- `200`：只有「单分片、从 0 开始、分片长度等于总长」才接受，其余判为 Range 无效；
+- `416`：核对本地分片是否其实已完整，完整则跳过，否则删除重下。
+
+**P0 · 拼接完整性校验**
+
+过去 `_concat` 对缺失分片是 `if (!await file.exists()) continue;`——
+`part0 + part1 + part3` 也会被当成成功文件交付。现在拼接前逐片核对存在性与长度，
+任何一片不符立即中止；拼接后再核对输出总长，不一致就删掉损坏产物并抛错。
+
+**P0 · URL 过期自动刷新**
+
+B 站播放地址有有效期，过去 403 后只会拿同一个失效地址重试 6 次然后失败。现在：
+
+- 状态码分类：`403/404/410` → 刷新 URL，`408/429/5xx` → 退避重试，其余 → 立即失败；
+- 刷新时**保留已完成的 part** 从断点继续——「下到 18 GB 地址过期」不会退回去重下；
+- 刷新有并发保护与次数上限（3 次），避免多分片同时打爆接口。
+
+**P0 · 任务唯一标识修复**
+
+旧 key 只有 `bvid_cid_quality_flags`，于是**同清晰度不同编码会被判成同一个任务互相顶掉**
+（4K AVC 与 4K HEVC 无法共存）。现在把决定文件内容的参数全部纳入，
+用 SHA-256 压成 32 位定长串：`bvid | cid | quality | codec | audioId | flags | 弹幕格式 | 字幕语言`。
+
+> ⚠️ 一次性影响：旧版本创建的同内容任务 key 与新格式不同，会被视为两条任务。
+
+**P1 · Read Idle Timeout 与退避策略**
+
+原来只有连接超时（20s），「连接成功 → 服务端停止发送数据 → TCP 不断开」会无限挂住。
+现在加了等待响应头 30 秒超时、**连续 30 秒无数据即断开重连**。
+固定 `400ms × attempts` 的退避改成指数退避（0.5s→…→30s 封顶）+ 0~500ms 抖动，
+并给单分片收到的数据加了「不得超过请求范围」的校验。
+
+**P1 · 附加资源独立状态**
+
+封面 / 弹幕 / 字幕失败过去只写日志，任务照样显示「已完成」。现在失败项记入
+`task.extras_error`（数据库 v3 迁移），任务卡片显示为
+**「已完成，但 弹幕 未成功 · 128 MB」**。
+
+> 评审建议新增 `COMPLETED_WITH_WARNINGS` 状态。我没有新增枚举值，而是用
+> `completedWithWarnings` 派生态——`TaskStatus` 在 12 处被引用（已完成列表、
+> 完成计数、缓存保护规则等），新增枚举需同步改动全部调用点，
+> 漏一处就会出现任务不显示「已完成」或缓存误删。语义相同，风险低得多。
+
+**P1 · MediaMuxer 输出校验与缓冲扩容**（Kotlin）
+
+- 封装后做轻量校验：轨道存在、期望的视频/音频轨存在、`Duration > 0`、
+  能读出至少一个样本、文件长度 > 1KB。失败则删掉产物返回 false，
+  上层保留原始分片并提示「重新合并」——`MediaMuxer` 返回成功 ≠ 文件能播。
+- 单帧缓冲从固定 4MB 改为**动态扩容**：捕获 `readSampleData` 的
+  `IllegalArgumentException` 后按倍扩容重试同一帧（4MB → 64MB 封顶），
+  兼顾普通视频的内存占用与 8K 关键帧的兼容性。
+
+**P1 · 文件名冲突处理**
+
+默认模板只有 `{title}`，批量下载时同名视频会写进同一个文件互相覆盖。
+现在在已有任务里查重并追加 `(1)`、`(2)`；模板新增 `{bvid}` / `{cid}` / `{codec}` / `{date}`。
+
+> 评审建议的 `{owner}/{title} [{bvid}]` 归档格式需要子目录支持，
+> 而 `sanitizeFileName` 会把 `/` 替换掉，属于单独一项改动，留到下一阶段。
+
+**本次未做（第一阶段剩余部分 / 第二阶段）**
+
+- Android 15/16 后台下载重构（User-Initiated Data Transfer / Native Scheduler）
+- Cookie / Secret 迁移到 Android Keystore
+- 自动化测试体系与 GitHub Actions CI
+
+这几项涉及原生调度器与密钥库，改动面比上面大一个量级，
+不适合和稳定性修复混在同一次提交里。
 
 ### v1.7.0
 
@@ -369,7 +448,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.7.0-arm64-v8a.apk
+adb install -r DownKyi-v1.8.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

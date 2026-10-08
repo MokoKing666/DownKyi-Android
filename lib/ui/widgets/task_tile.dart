@@ -109,12 +109,23 @@ class TaskTile extends StatelessWidget {
             '${formatSpeed(task.speed)} · 剩余 ${formatEta(task.remainSeconds)}',
       TaskStatus.paused => '已暂停 · ${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}',
       TaskStatus.merging => '正在合并音视频…',
-      TaskStatus.completed => task.merged
-          ? '已完成 · ${formatBytes(task.totalBytes)}'
-          : '已完成（未合并）· ${formatBytes(task.totalBytes)}',
+      TaskStatus.completed => _completedText(task),
       TaskStatus.failed => task.error ?? '下载失败',
     };
     return Text(text, style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
+  }
+
+  /// 视频本体完成，但封面 / 弹幕 / 字幕里可能有失败项。
+  ///
+  /// 过去无论附加资源成功与否都只显示「已完成」，
+  /// 用户会以为封面字幕都下好了。现在如实标出失败的是哪一项。
+  String _completedText(DownloadTask task) {
+    final size = formatBytes(task.totalBytes);
+    final extras = task.extrasError;
+    if (extras != null && extras.isNotEmpty) {
+      return '已完成，但 $extras 未成功 · $size';
+    }
+    return task.merged ? '已完成 · $size' : '已完成（未合并）· $size';
   }
 
   Widget _buildActions(BuildContext context) {
