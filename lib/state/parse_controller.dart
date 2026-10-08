@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/constants.dart';
-import '../core/link_parser.dart';
+import '../bili/link_parser.dart';
 import '../core/logger.dart';
-import '../data/bili_api.dart';
+import '../bili/bili_api.dart';
 import '../data/http_client.dart';
-import '../data/models.dart';
+import '../bili/models.dart';
 import '../data/settings_store.dart';
 import '../download/download_manager.dart';
 

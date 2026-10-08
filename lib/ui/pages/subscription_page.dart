@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
-import '../../core/link_parser.dart';
-import '../../data/models.dart';
+import '../../bili/link_parser.dart';
+import '../../bili/models.dart';
 import '../../data/subscription.dart';
 import '../../data/subscription_dao.dart';
 import '../../download/download_manager.dart';

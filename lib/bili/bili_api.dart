@@ -3,10 +3,25 @@ import 'dart:io';
 
 import '../core/constants.dart';
 import '../core/logger.dart';
-import '../core/wbi.dart';
+import '../data/http_client.dart';
 import 'danmaku_parser.dart';
-import 'http_client.dart';
 import 'models.dart';
+import 'wbi.dart';
+
+/// B 站接口层。
+///
+/// 分层约定（改动时请保持）：
+///
+///   lib/bili/      B 站专有的一切——接口、签名、链接识别、数据模型、
+///                  弹幕 protobuf。**B 站改接口只需动这里。**
+///   lib/data/      通用持久化与传输——HTTP 客户端、任务/订阅数据库、设置。
+///                  不认识 B 站的具体返回结构。
+///   lib/download/  可靠下载与媒体处理。只接受 URL 与文件路径，
+///                  以及 media 层已经抽象好的数据，不直接解析接口返回。
+///   lib/ui/        界面。只读 state/ 与 bili/ 暴露的模型。
+///
+/// 现状说明：`download_manager` 仍会自己调 [playUrl] 拿地址（而不是由上层注入），
+/// 这是下一步可以拆的点；但媒体与下载层已经不依赖任何 B 站返回结构了。
 
 /// 收藏夹（文件夹）
 class FavFolder {

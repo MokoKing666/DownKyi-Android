@@ -150,6 +150,32 @@ object NativeBridge {
                 result.success(text)
             }
 
+            // 敏感数据（Cookie / Token / aria2 密钥）的加密存储，见 SecureStore.kt
+            "secureWrite" -> {
+                SecureStore.write(
+                    activity,
+                    call.argument<String>("key") ?: "",
+                    call.argument<String>("value") ?: ""
+                )
+                result.success(true)
+            }
+
+            "secureRead" -> {
+                result.success(
+                    SecureStore.read(activity, call.argument<String>("key") ?: "")
+                )
+            }
+
+            "secureDelete" -> {
+                SecureStore.remove(activity, call.argument<String>("key") ?: "")
+                result.success(true)
+            }
+
+            "secureClear" -> {
+                SecureStore.clear(activity)
+                result.success(true)
+            }
+
             else -> result.notImplemented()
         }
     }

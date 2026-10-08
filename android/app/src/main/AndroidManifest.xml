@@ -44,6 +44,20 @@
         </activity>
 
         <!-- 下载前台服务：保证后台下载不被杀 -->
+        <!--
+            下载用的前台服务。
+            foregroundServiceType 必须是 dataSync（Android 14+ 强制要求声明类型，
+            否则启动即抛 MissingForegroundServiceTypeException）。
+
+            ⚠️ Android 15 起 dataSync 有「24 小时滚动窗口内累计约 6 小时」的运行时上限，
+            超额后系统会直接停服务并杀进程。这不是能靠 manifest 绕开的限制，
+            Google 给出的是改用 User-Initiated Data Transfer（JobScheduler）——
+            那需要把下载执行搬到 JobService 里跑，是独立的一次重构。
+
+            在此之前的做法是**优雅降级**，见 lib/download/download_session.dart：
+            在额度内主动累计、接近上限时主动暂停并写明原因，而不是等系统随机杀进程。
+            任务本身断点续传，暂停后重新开始即可，不丢已下载的分片。
+        -->
         <service
             android:name=".DownloadService"
             android:exported="false"

@@ -220,4 +220,49 @@ class NativeBridge {
       return null;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // 敏感数据加密存储（AndroidKeyStore + AES/GCM，实现见 SecureStore.kt）
+  //
+  // 这些方法失败时**不抛异常**，由 lib/core/secret_store.dart 决定回退策略：
+  // 宁可暂时不够安全，也不能因为加密存储不可用就把用户的登录状态弄丢。
+  // ---------------------------------------------------------------------------
+
+  static Future<bool> secureWrite(String key, String value) async {
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+          'secureWrite', <String, dynamic>{'key': key, 'value': value});
+      return ok ?? false;
+    } catch (error) {
+      AppLog.e('Native', '写入加密存储失败：$key', error);
+      return false;
+    }
+  }
+
+  static Future<String?> secureRead(String key) async {
+    try {
+      return await _channel
+          .invokeMethod<String>('secureRead', <String, dynamic>{'key': key});
+    } catch (error) {
+      AppLog.e('Native', '读取加密存储失败：$key', error);
+      return null;
+    }
+  }
+
+  static Future<void> secureDelete(String key) async {
+    try {
+      await _channel
+          .invokeMethod<void>('secureDelete', <String, dynamic>{'key': key});
+    } catch (error) {
+      AppLog.e('Native', '删除加密存储失败：$key', error);
+    }
+  }
+
+  static Future<void> secureClear() async {
+    try {
+      await _channel.invokeMethod<void>('secureClear');
+    } catch (error) {
+      AppLog.e('Native', '清空加密存储失败', error);
+    }
+  }
 }

@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.8.1（versionCode 12） |
+| 版本 | v1.8.2（versionCode 13） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,74 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.8.2 —— Android 现代化 · 安全存储 · 分层（技术评审第二阶段·二）
+
+**安全：Cookie / 密钥改为系统密钥库加密（评审第 13 项）**
+
+这一项修的不是稳定性，是**泄露面**。此前 `SESSDATA` / `bili_jct` / `DedeUserID` /
+aria2 RPC 密钥和普通设置一起明文躺在 SharedPreferences 里。这两类东西性质完全不同：
+设置被看到只是隐私问题，而 **`SESSDATA` 被拿到等于账号被拿走**——它可以直接调用
+任意已登录接口，不需要密码、不需要二次验证。
+
+现在改由 **AndroidKeyStore** 保管密钥、AES/GCM 加密后落盘（`SecureStore.kt`）：
+
+- 密钥永不出 keystore，即使 root 也导不出，应用只能请求它做加解密
+- 每次加密生成新 IV（GCM 的硬要求，复用 IV 会直接毁掉安全性）
+- **旧版明文自动迁移**：升级后首次读取时把明文加密回写，再删掉残留——
+  否则所有已登录用户会莫名其妙掉登录
+- **失败降级**：加密存储不可用时退回明文并记日志。安全性与可用性之间明确选可用性，
+  让用户因为 keystore 异常而掉登录比明文存着更糟
+
+顺带做了**日志脱敏**（`AppLog.redact`）：「设置 - 运行日志」是给用户排查问题用的，
+而用户遇到问题的第一反应就是把日志贴进 issue。现在 `SESSDATA` / `bili_jct` /
+`aria2Secret` / `access_token` 等字段的值只保留前 4 位。
+
+**Android 15/16 后台限制：从「被系统杀」改为「优雅降级」（评审第 12 项）**
+
+Android 15 起 `dataSync` 前台服务有 **24 小时滚动窗口内累计约 6 小时**的运行时上限，
+超额后系统直接停服务并杀进程。对「晚上挂机下 4K」这种场景是致命的：早上起来只下了一半，
+而且没有任何解释。
+
+Google 给出的长期方向是改用 User-Initiated Data Transfer（把下载执行搬进 JobService），
+那是独立的一次重构。**这一版先把「被随机杀」变成「主动收手」**：
+
+- 新增 `ForegroundBudget`：在额度内累计前台服务运行时长，按 24 小时滚动窗口计算，
+  空闲一段时间自动重置
+- 接近上限（80%）记日志，达到上限**主动暂停全部任务并写明原因**，
+  而不是等系统在随机时刻杀进程
+- 任务本身断点续传，暂停后重新开始即可，不丢已下载的分片
+
+**进程被杀后的任务恢复**
+
+数据库里会残留 `status = running / merging` 的任务，但其实没有任何下载在跑——
+UI 会一直显示「下载中」却永远不动，用户只能删掉重建。
+现在启动时统一重新入队（`DownloadSession.recoverInterrupted`），分片文件还在，
+会接着断点续传。
+
+**分层：B 站相关内容收进 `lib/bili/`（评审第 14 项）**
+
+```
+lib/bili/       B 站专有的一切——接口、WBI 签名、链接识别、数据模型、弹幕 protobuf
+                （B 站改接口只需动这里）
+lib/data/       通用持久化与传输——HTTP 客户端、任务/订阅数据库、设置
+lib/download/   可靠下载与媒体处理，只接受 URL 与文件路径
+lib/ui/         界面
+```
+
+`models.dart` / `bili_api.dart` / `wbi.dart` / `link_parser.dart` / `danmaku_parser.dart`
+已归入 `lib/bili/`。
+
+> 需要说明的是：分层只完成了一半。`DownloadManager` 目前仍会自己调 `playUrl` 拿地址，
+> 而不是由上层注入——把这一步拆开需要改动 `_execute()` 的主流程（含 aria2 分支），
+> 风险不小且没有真机可验证，留到下一版做。媒体层与分片下载器已经完全不依赖
+> B 站返回结构了。
+
+**新增测试**
+
+`test/security_test.dart`（日志脱敏 + 加密存储迁移/降级，含平台通道 mock）、
+`test/session_budget_test.dart`（时长预算的窗口滚动、阈值、空闲重置）。
+用例总数 91 → **121**。
 
 ### v1.8.1 —— 工程质量与可重复构建（技术评审第二阶段·一）
 
@@ -520,7 +588,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.8.1-arm64-v8a.apk
+adb install -r DownKyi-v1.8.2-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
@@ -654,24 +722,27 @@ packaging {
 lib/
 ├── main.dart                     应用入口：初始化设置 / 下载队列 / Provider
 ├── app.dart                      主题注入 + TDTheme + MaterialApp（换肤时重建子树）
-├── core/
-│   ├── constants.dart            接口地址、UA、清晰度/编码/引擎/保存位置/转换目标枚举
+├── bili/                         B 站专有层：改接口只需动这里
+│   ├── bili_api.dart             全部接口：view / playurl / pgc / pugv / nav / 二维码 / 收藏夹 / 合集 / 历史 / 字幕 / 弹幕
+│   ├── models.dart               手写 fromJson 的数据模型（不使用代码生成）
 │   ├── wbi.dart                  WBI 签名（mixinKey 重排 + md5）
 │   ├── link_parser.dart          链接识别（BV/av/ep/ss/收藏夹/合集/短链）
+│   └── danmaku_parser.dart       弹幕 protobuf 分片解析
+├── core/
+│   ├── constants.dart            接口地址、UA、清晰度/编码/引擎/保存位置/转换目标枚举
+│   ├── secret_store.dart         敏感数据加密存储门面（KeyStore + 明文迁移 + 失败降级）
 │   ├── protobuf_lite.dart        极简 protobuf 读取器（用于弹幕接口）
 │   ├── formatter.dart            时长 / 体积 / 速度 / 文件名格式化
-│   └── logger.dart               环形日志（设置页可查看）
+│   └── logger.dart               环形日志（写入前自动脱敏，设置页可查看）
 ├── data/
 │   ├── http_client.dart          dart:io HttpClient 封装：Cookie、Referer、WBI 参数
-│   ├── bili_api.dart             全部接口：view / playurl / pgc / pugv / nav / 二维码 / 收藏夹 / 合集 / 历史 / 字幕 / 弹幕
-│   ├── danmaku_parser.dart       弹幕 protobuf 分片解析
-│   ├── models.dart               手写 fromJson 的数据模型（不使用代码生成）
 │   ├── download_task.dart        任务模型（分片进度、状态机、aria2 gid、相册导出状态）
 │   ├── task_dao.dart             sqflite 任务持久化（version 2，含 aria2 / 导出字段迁移）
 │   └── settings_store.dart       SharedPreferences 设置（含主题、引擎、Aria2、保存位置）
 ├── download/
 │   ├── segment_downloader.dart   多线程分片 + 断点续传核心
 │   ├── download_manager.dart     双引擎调度 / 合并 / 相册落盘 / 附加资源 / 通知
+│   ├── download_session.dart     中断任务恢复 + 前台服务时长预算（Android 15+ 降级）
 │   ├── aria2_client.dart         Aria2 JSON-RPC 客户端（addUri / tellStatus / pause …）
 │   ├── ffmpeg_service.dart       FFmpeg 封装：探测、参数拼装、执行、进度、取消
 │   └── danmaku_writer.dart       弹幕 → ASS（\move + 轨道避让）/ XML / TXT

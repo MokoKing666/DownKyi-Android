@@ -4,7 +4,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
 import '../../core/formatter.dart';
-import '../../data/models.dart';
+import '../../bili/models.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
 import '../widgets/download_options.dart';

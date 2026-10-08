@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
-import '../../data/models.dart';
+import '../../bili/models.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
 import '../widgets/download_options_sheet.dart';

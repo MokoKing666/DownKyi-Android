@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants.dart';
+import '../core/secret_store.dart';
 import '../ui/theme.dart';
 import 'http_client.dart';
 
@@ -128,7 +129,13 @@ class SettingsStore extends ChangeNotifier {
     followSystemDark = prefs.getBool(_kFollowSystemDark) ?? true;
     downloadEngine = DownloadEngine.fromName(prefs.getString(_kEngine));
     aria2RpcUrl = prefs.getString(_kAria2Url) ?? defaultAria2Url;
-    aria2Secret = prefs.getString(_kAria2Secret) ?? '';
+    // 敏感数据：优先读加密存储，读不到再回落到旧版明文并就地迁移。
+    // 加密存储不可用时保留明文——宁可暂时不够安全，也不能让用户掉登录。
+    aria2Secret = await SecretStore.read(
+      SecretStore.keyAria2Secret,
+      legacy: prefs.getString(_kAria2Secret) ?? '',
+    );
+    if (SecretStore.available) await prefs.remove(_kAria2Secret);
     aria2Split = prefs.getInt(_kAria2Split) ?? 16;
     aria2Dir = prefs.getString(_kAria2Dir) ?? '';
     gifFps = prefs.getInt(_kGifFps) ?? 12;
@@ -141,11 +148,15 @@ class SettingsStore extends ChangeNotifier {
       orElse: () => DanmakuFormat.ass,
     );
 
-    // Cookie 恢复
-    final cookie = prefs.getString(_kCookie) ?? '';
+    // Cookie 恢复（同样：先加密存储，读不到再拿旧明文迁移）
+    final cookie = await SecretStore.read(
+      SecretStore.keyCookie,
+      legacy: prefs.getString(_kCookie) ?? '',
+    );
     if (cookie.isNotEmpty) {
       AppHttp.instance.setCookieHeader(cookie);
     }
+    if (SecretStore.available) await prefs.remove(_kCookie);
     _loaded = true;
     notifyListeners();
   }
@@ -171,24 +182,53 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setBool(_kFollowSystemDark, followSystemDark);
     await prefs.setString(_kEngine, downloadEngine.name);
     await prefs.setString(_kAria2Url, aria2RpcUrl);
-    await prefs.setString(_kAria2Secret, aria2Secret);
     await prefs.setInt(_kAria2Split, aria2Split);
     await prefs.setString(_kAria2Dir, aria2Dir);
     await prefs.setInt(_kGifFps, gifFps);
     await prefs.setBool(_kSubCheck, subscriptionCheckEnabled);
     await prefs.setInt(_kSubInterval, subscriptionIntervalHours);
-    await prefs.setString(_kCookie, AppHttp.instance.cookieHeader);
+    await _saveSecrets(prefs);
+  }
+
+  /// 落盘敏感数据（Cookie / aria2 密钥）。
+  ///
+  /// 加密存储可用时**只**写加密存储，并删掉 SharedPreferences 里的明文残留——
+  /// 保留明文等于白加密。只有加密存储不可用时才保留明文，
+  /// 因为让用户因为 keystore 异常而掉登录，比明文存着更糟。
+  Future<void> _saveSecrets(SharedPreferences prefs) async {
+    await SecretStore.write(SecretStore.keyAria2Secret, aria2Secret);
+    await SecretStore.write(
+        SecretStore.keyCookie, AppHttp.instance.cookieHeader);
+    if (SecretStore.available) {
+      await prefs.remove(_kAria2Secret);
+      await prefs.remove(_kCookie);
+    } else {
+      await prefs.setString(_kAria2Secret, aria2Secret);
+      await prefs.setString(_kCookie, AppHttp.instance.cookieHeader);
+    }
   }
 
   Future<void> saveCookies() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kCookie, AppHttp.instance.cookieHeader);
+    await _saveSecrets(prefs);
   }
 
   Future<void> clearCookies() async {
     AppHttp.instance.clearCookies();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kCookie);
+    await SecretStore.delete(SecretStore.keyCookie);
+    notifyListeners();
+  }
+
+  /// 退出登录：清空全部敏感数据（含加密存储）
+  Future<void> clearSecrets() async {
+    AppHttp.instance.clearCookies();
+    await SecretStore.clear();
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in SecretStore.allKeys) {
+      await prefs.remove(key);
+    }
     notifyListeners();
   }
 

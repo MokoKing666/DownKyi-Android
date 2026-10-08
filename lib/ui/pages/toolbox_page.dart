@@ -8,7 +8,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
 import '../../core/formatter.dart';
-import '../../data/bili_api.dart';
+import '../../bili/bili_api.dart';
 import '../../data/download_task.dart';
 import '../../data/settings_store.dart';
 import '../../download/danmaku_writer.dart';

@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
-import '../../data/bili_api.dart';
+import '../../bili/bili_api.dart';
 import '../../data/http_client.dart';
-import '../../data/models.dart';
+import '../../bili/models.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
 import '../widgets/video_card.dart';

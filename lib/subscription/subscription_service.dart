@@ -1,8 +1,8 @@
 import '../core/constants.dart';
 import '../core/logger.dart';
-import '../data/bili_api.dart';
+import '../bili/bili_api.dart';
 import '../data/http_client.dart';
-import '../data/models.dart';
+import '../bili/models.dart';
 import '../data/subscription.dart';
 import '../data/subscription_dao.dart';
 import '../download/download_manager.dart';
