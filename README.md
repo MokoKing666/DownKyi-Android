@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v1.6.0（versionCode 9） |
+| 版本 | v1.7.0（versionCode 10） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,45 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v1.7.0
+
+**修复：状态栏图标「改了不变」的真正原因**
+
+上一版把图标资源改名成 `ic_stat_downkyi` 但**依然不生效**。对比两个 APK 的资源表后定位到原因：
+
+```
+v1.6.0 :  resource 0x7f070065  drawable/ic_stat_downkyi
+v1.5.0 :  resource 0x7f070065  drawable/ic_stat_download    ← 资源 ID 完全相同
+```
+
+Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID」缓存通知图标位图**，
+而它收到 `ACTION_PACKAGE_REMOVED` 时**会跳过 `EXTRA_REPLACING = true` 的情况**——
+也就是**覆盖安装不会清掉这个缓存**。资源改名并不改变 aapt2 分配的 ID
+（两者在资源表里处于同一排序位置），所以系统一直拿缓存里的旧箭头位图。
+
+**这条缓存位于 system_server 内存中，重启手机即清**；彻底卸载（而非覆盖安装）同样有效。
+
+图标本身也做了修正：把 logo 渲染到 192px 后做**腐蚀**，把 K 的缝隙从约 0.6px 加宽到约 1.6px。
+之前 24px 下缝隙被缩放糊掉，剪影读起来只是一个白三角。
+
+**改进：缓存清理改为「缓存分析」**
+
+原来的确认弹窗只有一句「可释放约 X」，太草率。现在会**扫描工作目录并按文件类型分组**：
+
+| 分组 | 内容 |
+|---|---|
+| 分段临时文件 | `.partN` —— 多线程分片下载的中间产物 |
+| 媒体分片 | `video / audio` 的 `.m4s`，尚未合并 |
+| 视频 / 音频成品 | 已合并的 `mp4 / mkv / m4a / mp3` |
+| 封面图片 | `jpg / png` 等 |
+| 弹幕 / 字幕 | `ass / xml / srt / txt` |
+| 其它文件 | 不属于以上分类 |
+
+- 每组显示**文件数量与占用体积**，由用户自己勾选要清理哪些。
+- **区分「可清理」与「占用中」**：仍被任务引用的文件（未完成任务的临时分片、
+  未导出成品的路径）单独列出并标注原因，**不会被删除**，避免破坏断点续传或丢文件。
+- 底部实时显示「已选 N 个文件，将释放 X」。
 
 ### v1.6.0
 
@@ -330,7 +369,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v1.6.0-arm64-v8a.apk
+adb install -r DownKyi-v1.7.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

@@ -15,7 +15,7 @@
     不传则依次尝试：环境变量 GITHUB_TOKEN -> 交互式安全输入。
 
 .PARAMETER Tag
-    版本号标签，默认 v1.6.0。APK 文件名会按 DownKyi-<Tag>-arm64-v8a.apk 推导。
+    版本号标签，默认 v1.7.0。APK 文件名会按 DownKyi-<Tag>-arm64-v8a.apk 推导。
 
 .PARAMETER Draft
     加此参数则发布为草稿，不公开。
@@ -29,7 +29,7 @@
 #>
 param(
     [string] $Token,
-    [string] $Tag = 'v1.6.0',
+    [string] $Tag = 'v1.7.0',
     [string] $Repo = 'MokoKing666/DownKyi-Android',
     [string] $Branch = 'main',
     [string] $ApkPath,
@@ -82,7 +82,25 @@ SHA256：`{SHA256}`
 
 ## ✨ 本次更新（{TAG}）
 
-### 修复：合并出来的视频卡顿（重要）
+### 修复：状态栏图标「改了不变」的真正原因
+
+- 对比两个 APK 的资源表：`ic_stat_downkyi` 与上一版的 `ic_stat_download`
+  拿到的是**同一个资源 ID `0x7f070065`**。Android 的
+  `NotificationManagerService.IconManager` 按「包名 + 资源 ID」缓存通知图标位图，
+  且收到 `ACTION_PACKAGE_REMOVED` 时**会跳过 `EXTRA_REPLACING = true`**，
+  即**覆盖安装不会清缓存**——所以改名也没用，系统一直显示缓存里的旧箭头。
+- **这条缓存在 system_server 内存里，重启手机即清**；彻底卸载重装同样有效。
+- 图标本身也做了修正：把 logo 渲染到 192px 后做腐蚀，
+  K 的缝隙从约 0.6px 加宽到约 1.6px，避免 24px 下糊成一个白三角。
+
+### 改进：缓存清理改为「缓存分析」
+
+- 扫描工作目录并按文件类型分组（分段临时文件 / 媒体分片 / 成品 / 封面 / 弹幕字幕 / 其它），
+  每组显示文件数量与体积，由用户自己勾选。
+- **区分「可清理」与「占用中」**：仍被任务引用的文件（未完成任务的临时分片、
+  未导出成品的路径）单独列出并标注原因，不会被删除，避免破坏断点续传或丢文件。
+
+### v1.6.0 起已具备：合并卡顿修复
 
 - `MediaMuxerHelper` 过去为了保证「时间戳单调递增」，把回退的 PTS 强行改写成
   `lastWritten + 1`。但 **B 站视频普遍带 B 帧**，而 B 帧在解码顺序里的 PTS 本来

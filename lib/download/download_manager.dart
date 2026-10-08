@@ -797,49 +797,102 @@ class DownloadManager extends ChangeNotifier {
   // 缓存
   // ------------------------------------------------------------------
 
-  /// 缓存占用（工作目录下的临时分片目录）
+  /// 缓存占用（工作目录，含 .tmp 临时分片目录）
   Future<int> cacheBytes() async {
     try {
       final dir = await ensureDownloadDir();
-      return await _dirSize(Directory('$dir/.tmp'));
+      return await _dirSize(Directory(dir));
     } catch (error) {
       AppLog.e('Task', '统计缓存失败', error);
       return 0;
     }
   }
 
-  /// 清理缓存：删除临时目录里不再被任何任务使用的分片。
+  /// 分析工作目录，按文件类型分组，用于「缓存分析」界面。
   ///
-  /// **保护规则**：未完成（排队 / 下载中 / 合并中 / 已暂停）的任务，
-  /// 其 `{key}_v.m4s` / `{key}_a.m4s` 以及对应的 `.partN` 分片一律保留，
-  /// 否则「暂停 / 继续」和断点续传会失效。已完成 / 失败 / 已删除任务的残留才会被清掉。
-  ///
-  /// 返回释放的字节数。
-  Future<int> clearCache() async {
-    var freed = 0;
+  /// 每个分组区分两部分：
+  /// - **可清理**：没有任何任务引用的文件；
+  /// - **占用中**：仍被任务引用（未完成任务的临时分片、未导出成品的路径），
+  ///   界面只展示数量与体积，**不会删除**，避免误删用户文件或破坏断点续传。
+  Future<List<CacheGroup>> analyzeCache() async {
+    final groups = <String, CacheGroupBuilder>{};
+    for (final meta in cacheCategories) {
+      groups[meta.key] = CacheGroupBuilder(meta);
+    }
+
     try {
       final dir = await ensureDownloadDir();
-      final tmp = Directory('$dir/.tmp');
-      if (!await tmp.exists()) return 0;
+      final root = Directory(dir);
+      if (!await root.exists()) return const <CacheGroup>[];
 
-      final keep = <String>[];
+      // 任务正在引用的路径
+      final usedPaths = <String>{};
+      // 未完成任务的分片前缀（含 .partN）
+      final activePrefixes = <String>[];
       for (final task in tasks) {
-        if (task.status == TaskStatus.completed || task.status == TaskStatus.failed) {
-          continue;
+        for (final path in <String?>[
+          task.videoPath,
+          task.audioPath,
+          task.outputPath,
+          task.exportedPath,
+        ]) {
+          if (path != null && path.isNotEmpty && !path.startsWith('content://')) {
+            usedPaths.add(path);
+          }
         }
-        keep.add('${task.key}_v.m4s');
-        keep.add('${task.key}_a.m4s');
+        if (task.status != TaskStatus.completed && task.status != TaskStatus.failed) {
+          activePrefixes.add('${task.key}_v.m4s');
+          activePrefixes.add('${task.key}_a.m4s');
+        }
       }
 
-      await for (final entity in tmp.list(followLinks: false)) {
+      await for (final entity in root.list(recursive: true, followLinks: false)) {
         if (entity is! File) continue;
         final name = entity.uri.pathSegments.last;
-        if (keep.any(name.startsWith)) continue;
+        final builder = groups[_cacheCategoryOf(name)] ?? groups['other']!;
+        final kept = usedPaths.contains(entity.path) || activePrefixes.any(name.startsWith);
+        int size = 0;
         try {
-          freed += await entity.length();
-          await entity.delete();
+          size = await entity.length();
         } catch (_) {
-          // 单个文件删不掉不影响整体
+          // 忽略
+        }
+        if (kept) {
+          builder.keptCount++;
+          builder.keptBytes += size;
+        } else {
+          builder.paths.add(entity.path);
+          builder.bytes += size;
+        }
+      }
+    } catch (error) {
+      AppLog.e('Task', '缓存分析失败', error);
+    }
+
+    return groups.values
+        .where((builder) => !builder.isEmpty)
+        .map((builder) => builder.build())
+        .toList(growable: false);
+  }
+
+  /// 清理指定分组里「可清理」的文件，返回释放的字节数
+  Future<int> clearCacheGroups(List<String> keys) async {
+    final selected = keys.toSet();
+    var freed = 0;
+    try {
+      final groups = await analyzeCache();
+      for (final group in groups) {
+        if (!selected.contains(group.key)) continue;
+        for (final path in group.paths) {
+          try {
+            final file = File(path);
+            if (await file.exists()) {
+              freed += await file.length();
+              await file.delete();
+            }
+          } catch (_) {
+            // 单个文件失败不影响整体
+          }
         }
       }
       AppLog.d('Task', '清理缓存释放 ${(freed / 1024 / 1024).toStringAsFixed(1)} MB');
@@ -847,6 +900,20 @@ class DownloadManager extends ChangeNotifier {
       AppLog.e('Task', '清理缓存失败', error);
     }
     return freed;
+  }
+
+  /// 按文件名判断所属的缓存分组
+  static String _cacheCategoryOf(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('.part')) return 'part';
+    final extension = lower.contains('.') ? lower.split('.').last : '';
+    return switch (extension) {
+      'm4s' => 'm4s',
+      'mp4' || 'mkv' || 'm4a' || 'mp3' => 'media',
+      'jpg' || 'jpeg' || 'png' || 'gif' || 'webp' => 'image',
+      'ass' || 'xml' || 'srt' || 'txt' => 'text',
+      _ => 'other',
+    };
   }
 
   Future<int> _dirSize(Directory dir) async {
@@ -1060,4 +1127,75 @@ class DownloadManager extends ChangeNotifier {
     _aria2Client = null;
     super.dispose();
   }
+}
+
+/// 缓存分析的分组定义（数组顺序即界面展示顺序）
+const List<({String key, String label, String description})> cacheCategories =
+    <({String key, String label, String description})>[
+  (key: 'part', label: '分段临时文件', description: '.partN —— 多线程分片下载的中间产物'),
+  (key: 'm4s', label: '媒体分片', description: 'video / audio 的 .m4s，尚未合并'),
+  (key: 'media', label: '视频 / 音频成品', description: '已合并的 mp4 / mkv / m4a / mp3'),
+  (key: 'image', label: '封面图片', description: 'jpg / png 等图片'),
+  (key: 'text', label: '弹幕 / 字幕', description: 'ass / xml / srt / txt'),
+  (key: 'other', label: '其它文件', description: '不属于以上分类'),
+];
+
+/// 「缓存分析」里的一个分组。
+///
+/// 区分「可清理」与「占用中」：占用中的文件仍被任务引用
+/// （未完成任务的临时分片、未导出成品的路径），界面只展示不删除。
+class CacheGroup {
+  const CacheGroup({
+    required this.key,
+    required this.label,
+    required this.description,
+    required this.bytes,
+    required this.paths,
+    required this.keptCount,
+    required this.keptBytes,
+  });
+
+  final String key;
+  final String label;
+  final String description;
+
+  /// 可清理部分
+  final int bytes;
+  final List<String> paths;
+
+  /// 仍被任务占用、不会被删除的部分
+  final int keptCount;
+  final int keptBytes;
+
+  int get fileCount => paths.length;
+
+  bool get hasKept => keptCount > 0;
+
+  int get totalBytes => bytes + keptBytes;
+
+  int get totalCount => fileCount + keptCount;
+}
+
+/// [CacheGroup] 的可变累加器
+class CacheGroupBuilder {
+  CacheGroupBuilder(this.meta);
+
+  final ({String key, String label, String description}) meta;
+
+  final List<String> paths = <String>[];
+  int bytes = 0;
+  int keptCount = 0;
+  int keptBytes = 0;
+
+  bool get isEmpty => paths.isEmpty && keptCount == 0;
+
+  CacheGroup build() => CacheGroup(
+        key: meta.key,
+        label: meta.label,
+        description: meta.description,
+        bytes: bytes,
+        paths: List<String>.unmodifiable(paths),
+        keptCount: keptCount,
+        keptBytes: keptBytes,
+      );
 }

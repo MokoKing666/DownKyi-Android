@@ -16,6 +16,7 @@ import '../../download/download_manager.dart';
 import '../../download/ffmpeg_service.dart';
 import '../../native/bridge.dart';
 import '../td.dart';
+import '../widgets/cache_analysis_sheet.dart';
 
 /// 工具箱：格式转换 / 重新合并 / 转换弹幕 / 导出，均可直接点击使用。
 class ToolboxPage extends StatelessWidget {
@@ -193,48 +194,13 @@ class ToolboxPage extends StatelessWidget {
   // 格式转换
   // ------------------------------------------------------------------
 
-  /// 清理缓存：只删临时分片与残留文件。
-  ///
-  /// 保护规则在 `DownloadManager.clearCache()` 里：正在下载 / 已暂停的任务
-  /// 其分片会保留，断点续传不受影响。
+  /// 清理缓存：先做文件分析（按类型分组、区分「可清理」与「占用中」），
+  /// 再由用户勾选要清理的类别。
   Future<void> _clearCache(BuildContext context) async {
     final manager = context.read<DownloadManager>();
-    tdLoadingShow(context, text: '统计缓存');
-    final before = await manager.cacheBytes();
-    tdLoadingHide();
-    if (!context.mounted) return;
-    if (before <= 0) {
-      tdToast(context, '没有可清理的缓存');
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('清理缓存', style: TdText.titleSmall),
-        content: Text(
-          '将删除临时分片与残留文件，可释放约 ${formatBytes(before)}。\n\n'
-          '正在下载、已暂停的任务分片会保留，断点续传不受影响；'
-          '已下载完成的文件不会被删除。',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('清理'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-
-    final freed = await manager.clearCache();
-    if (!context.mounted) return;
-    tdToastSuccess(context, '已释放 ${formatBytes(freed)}');
+    final freed = await showCacheAnalysisSheet(context, manager);
+    if (!context.mounted || freed == null) return;
+    tdToastSuccess(context, freed > 0 ? '已释放 ${formatBytes(freed)}' : '没有清理任何文件');
   }
 
   Future<void> _convertFromTask(BuildContext context) async {
