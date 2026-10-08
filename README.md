@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.2（versionCode 16） |
+| 版本 | v2.0.3（versionCode 17） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -114,6 +114,40 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 
 ## 🧾 更新日志
 
+### v2.0.3 —— 修复「杜比视界降级成普通 HDR」与「合并后体积翻倍」
+
+**这两个是同一个根因：v2.0.2 的 `-map` 写窄了。**
+
+v2.0.2 写的是 `-map 0:v:0`（只取第一条视频轨）。而**杜比视界 Profile 7 是
+「基础层 BL + 增强层 EL」两条独立的视频轨**——只取第一条，增强层会被丢掉，
+表现就是「杜比视界降级成普通 HDR10」。
+
+同时杜比视界的 codec tag（`dvh1` / `dvhe`）在 MP4 里属于**非官方标签**，
+FFmpeg 默认会因为 strict 检查拒绝写出，产物被标成普通 `hev1` / `hvc1`，
+播放器同样认不出杜比视界。
+
+修复：
+
+```
+ffmpeg -y -i video.m4s -i audio.m4s -map 0:v -map 1:a \
+       -c copy -strict unofficial -movflags +faststart out.mp4
+```
+
+- `-map 0:v` 搬运**全部**视频轨，不再丢增强层；普通视频本来就只有一条轨，无副作用
+- `-strict unofficial` 放开非官方标签，`dvh1` / `dvhe` 才能原样写出
+
+**关于体积**：如果你看到的「387.4M → 700多M」是**视频分片 → 合并后成品**的对比，
+那需要先分清「视频流本身」和「视频流 + 音轨」。合并后的成品必然是两者之和，
+杜比全景声这类音轨在长视频上可以到几百 MB。
+
+为了能一次定位，现在封装完成时会把三个体积写进运行日志：
+
+```
+[D][Task] 封装完成：视频 406218342 + 音频 128743920 -> 成品 534962262 字节
+```
+
+下次如果还觉得不对，把这一行发出来就能立刻判断是下载环节还是封装环节。
+
 ### v2.0.2 —— 修复「合并后画面一顿一顿」
 
 **改用 FFmpeg 做无损重封装，MediaMuxer 退为兜底。**
@@ -132,7 +166,7 @@ App 里本来就打包了完整 FFmpeg，`-c copy` 会正确生成 `ctts`，不�
 现在自动合并与工具箱的手动合并都优先走 FFmpeg：
 
 ```
-ffmpeg -y -i video.m4s -i audio.m4s -map 0:v:0 -map 1:a:0 -c copy -movflags +faststart out.mp4
+ffmpeg -y -i video.m4s -i audio.m4s -map 0:v -map 1:a -c copy -movflags +faststart out.mp4
 ```
 
 - `-c copy` 保证无损，不重新编码
@@ -798,7 +832,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.2-arm64-v8a.apk
+adb install -r DownKyi-v2.0.3-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

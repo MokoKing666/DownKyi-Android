@@ -589,10 +589,13 @@ void main() {
       expect(args[args.indexOf('-i') + 1], 'v.m4s');
       expect(args.lastIndexOf('-i'), greaterThan(args.indexOf('-i')));
       expect(args[args.lastIndexOf('-i') + 1], 'a.m4s');
-      // 只取第一条视频轨 + 第一条音频轨
-      expect(args[args.indexOf('-map') + 1], '0:v:0');
+      // 必须是 0:v（全部视频轨），不能写成 0:v:0：
+      // 杜比视界 Profile 7 是「基础层 + 增强层」两条独立视频轨，
+      // 只取第一条会把增强层丢掉，杜比视界就降级成普通 HDR10 了
+      expect(args[args.indexOf('-map') + 1], '0:v');
+      expect(args[args.indexOf('-map') + 1], isNot('0:v:0'));
       expect(args.lastIndexOf('-map'), greaterThan(args.indexOf('-map')));
-      expect(args[args.lastIndexOf('-map') + 1], '1:a:0');
+      expect(args[args.lastIndexOf('-map') + 1], '1:a');
     });
 
     test('必须是无损：-c copy，不能出现任何编码器', () {
@@ -616,11 +619,20 @@ void main() {
       expect(args.contains('-movflags'), isFalse);
     });
 
-    test('只有音频时只有一个输入、不带 -map', () {
+    test('单输入：只有一个 -i，且仍然搬全部视频轨', () {
       final args = FfmpegOps.remux(video: 'a.m4s', output: 'o.m4a');
       expect(args.where((item) => item == '-i').length, 1);
-      expect(args.contains('-map'), isFalse);
+      expect(args[args.indexOf('-map') + 1], '0:v');
+      expect(args.where((item) => item == '-map').length, 1);
       expect(args[args.indexOf('-c') + 1], 'copy');
+    });
+
+    test('放开非官方标签，否则杜比视界的 dvh1/dvhe 写不出来', () {
+      final args =
+          FfmpegOps.remux(video: 'v.m4s', audio: 'a.m4s', output: 'o.mp4');
+      expect(args[args.indexOf('-strict') + 1], 'unofficial');
+      // 必须在输出路径之前，否则会被当成输入文件
+      expect(args.indexOf('-strict'), lessThan(args.length - 1));
     });
 
     test('空音频路径等同单输入', () {

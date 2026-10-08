@@ -861,6 +861,16 @@ class DownloadManager extends ChangeNotifier {
     return failed;
   }
 
+  Future<int> _fileSize(String? path) async {
+    if (path == null || path.isEmpty) return 0;
+    try {
+      final file = File(path);
+      return await file.exists() ? await file.length() : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   /// 用 FFmpeg 无损重新封装（原因见 FfmpegOps.remux 的注释）。
   ///
   /// 返回 false 表示「没成功」或「不可用」，调用方应回退到系统 MediaMuxer。
@@ -930,6 +940,13 @@ class DownloadManager extends ChangeNotifier {
     }
 
     if (ok) {
+      // 先把三个体积记进日志再删源文件：用户报「合并后变大了一倍」这类问题时，
+      // 单看最终文件是判断不出问题出在下载还是封装的，必须有这三个数才能定位。
+      AppLog.d(
+        'Task',
+        '封装完成：视频 ${await _fileSize(videoPath)} + 音频 ${await _fileSize(audioPath)} '
+            '-> 成品 ${await _fileSize(output)} 字节',
+      );
       await _deleteFile(videoPath);
       await _deleteFile(audioPath);
 

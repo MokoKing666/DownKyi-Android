@@ -62,13 +62,26 @@ class FfmpegOps {
     required String output,
     bool fastStart = true,
   }) {
+    final hasAudio = audio != null && audio.isNotEmpty;
     final args = <String>['-y', '-i', video];
-    if (audio != null && audio.isNotEmpty) {
-      // 显式 -map：只要第一条视频轨和第一条音频轨，
-      // 免得输入里的数据轨 / 封面轨被一起搬进产物
-      args.addAll(<String>['-i', audio, '-map', '0:v:0', '-map', '1:a:0']);
-    }
+    if (hasAudio) args.addAll(<String>['-i', audio]);
+
+    // ⚠️ 必须是 `-map 0:v`（全部视频轨），**不能**写成 `-map 0:v:0`。
+    //
+    // 杜比视界 Profile 7 是「基础层 BL + 增强层 EL」**两条独立的视频轨**，
+    // 只取第一条会把增强层丢掉——表现就是「杜比视界降级成普通 HDR10」，
+    // 而且元数据没了之后播放器只会当普通 HEVC 播。
+    // 这里多搬一条轨不会有副作用：普通视频本来就只有一条视频轨。
+    args.addAll(<String>['-map', '0:v']);
+    if (hasAudio) args.addAll(<String>['-map', '1:a']);
+
     args.addAll(<String>['-c', 'copy']);
+
+    // 杜比视界的 codec tag（dvh1 / dvhe）在 MP4 里属于「非官方」标签，
+    // FFmpeg 默认会因为 strict 检查拒绝写出，于是产物被标成普通 hev1/hvc1，
+    // 播放器认不出杜比视界。放开这个开关才能原样保留。
+    args.addAll(<String>['-strict', 'unofficial']);
+
     if (fastStart) {
       // 把 moov 挪到文件头：播放器不用先读完整段就能起播，
       // 拖动进度条也不会卡一下。代价是封装时多一次尾部数据搬移。
