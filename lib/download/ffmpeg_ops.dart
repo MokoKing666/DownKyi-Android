@@ -66,13 +66,15 @@ class FfmpegOps {
     final args = <String>['-y', '-i', video];
     if (hasAudio) args.addAll(<String>['-i', audio]);
 
-    // ⚠️ 必须是 `-map 0:v`（全部视频轨），**不能**写成 `-map 0:v:0`。
+    // ⚠️ 必须是 `-map 0:v:0`（**只取第一条视频轨**），不能写成 `-map 0:v`。
     //
-    // 杜比视界 Profile 7 是「基础层 BL + 增强层 EL」**两条独立的视频轨**，
-    // 只取第一条会把增强层丢掉——表现就是「杜比视界降级成普通 HDR10」，
-    // 而且元数据没了之后播放器只会当普通 HEVC 播。
-    // 这里多搬一条轨不会有副作用：普通视频本来就只有一条视频轨。
-    args.addAll(<String>['-map', '0:v']);
+    // 杜比视界 Profile 7 是「基础层 BL + 增强层 EL」两条独立的视频轨。
+    // 写成 `-map 0:v` 会把两条都搬进成品，结果是：
+    //   • 体积正好翻倍（两条轨各占一份）
+    //   • **系统播放器普遍播不了**——双视频轨的 mp4 不是标准形态
+    // 而只取第一条虽然会丢掉增强层（杜比标可能不显示），但成品一定能播。
+    // 「能播」优先于「标好看」，这个取舍是用户实测三轮后的结论。
+    args.addAll(<String>['-map', '0:v:0']);
     if (hasAudio) args.addAll(<String>['-map', '1:a']);
 
     args.addAll(<String>['-c', 'copy']);

@@ -589,11 +589,12 @@ void main() {
       expect(args[args.indexOf('-i') + 1], 'v.m4s');
       expect(args.lastIndexOf('-i'), greaterThan(args.indexOf('-i')));
       expect(args[args.lastIndexOf('-i') + 1], 'a.m4s');
-      // 必须是 0:v（全部视频轨），不能写成 0:v:0：
+      // 必须是 0:v:0 —— **只取第一条视频轨**。
       // 杜比视界 Profile 7 是「基础层 + 增强层」两条独立视频轨，
-      // 只取第一条会把增强层丢掉，杜比视界就降级成普通 HDR10 了
-      expect(args[args.indexOf('-map') + 1], '0:v');
-      expect(args[args.indexOf('-map') + 1], isNot('0:v:0'));
+      // 写成 0:v 会把两条都搬进成品：体积正好翻倍，而且系统播放器播不了。
+      // 「能播」优先于「杜比标好看」。
+      expect(args[args.indexOf('-map') + 1], '0:v:0');
+      expect(args[args.indexOf('-map') + 1], isNot('0:v'));
       expect(args.lastIndexOf('-map'), greaterThan(args.indexOf('-map')));
       expect(args[args.lastIndexOf('-map') + 1], '1:a');
     });

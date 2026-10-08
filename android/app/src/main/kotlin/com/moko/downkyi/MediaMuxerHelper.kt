@@ -58,6 +58,10 @@ object MediaMuxerHelper {
         var muxerStopped = false
         try {
             val refs = mutableListOf<TrackRef>()
+            // 视频轨限定为**全局一条**（所有输入一起算），而不是「每条输入一条」。
+            // 这样无论进来的是「视频 m4s + 音频 m4s」还是「音视频同文件的 durl mp4」，
+            // 成品里都不可能再出现第二条视频轨——那正是体积翻倍且播不了的成因。
+            var videoTaken = false
             for (path in inputs) {
                 val extractor = MediaExtractor()
                 var accepted = 0
@@ -66,11 +70,28 @@ object MediaMuxerHelper {
                     for (index in 0 until extractor.trackCount) {
                         val mime = extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
                         if (mime == null) continue
-                        if (!mime.startsWith("video/") && !mime.startsWith("audio/")) continue
+                        val isVideo = mime.startsWith("video/")
+                        val isAudio = mime.startsWith("audio/")
+                        if (!isVideo && !isAudio) continue
+
+                        // ⚠️ 每条输入**只取第一条视频轨**，音频轨则全部保留。
+                        //
+                        // 这里曾经写成「所有音视频轨都搬」，本意是修 durl 直链
+                        // （音视频在同一个 mp4 里）只取第一条视频轨会把音频丢掉的问题。
+                        // 但用力过猛：杜比视界 Profile 7 是「基础层 BL + 增强层 EL」
+                        // **两条视频轨**，两条都搬会得到——体积正好翻倍、
+                        // 且系统播放器普遍播不了的**双轨 mp4**。
+                        //
+                        // 音频全留、视频只留第一条，这两个需求互不冲突：
+                        // durl 的音频照样不会丢，多轨视频也不会被复制。
+                        if (isVideo) {
+                            if (videoTaken) continue
+                            videoTaken = true
+                        }
                         extractor.selectTrack(index)
                         val ref = TrackRef(extractor, index)
-                        ref.isVideo = mime.startsWith("video/")
-                        ref.isAudio = mime.startsWith("audio/")
+                        ref.isVideo = isVideo
+                        ref.isAudio = isAudio
                         refs.add(ref)
                         accepted++
                     }

@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.5（versionCode 19） |
+| 版本 | v2.0.6（versionCode 20） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -114,6 +114,55 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 
 ## 🧾 更新日志
 
+### v2.0.6 —— 真正的根因：成品里有两条视频轨
+
+**这一条是从你的数据里推出来的，不是猜的。**
+
+「583.8MB → 1.13GB（1.94 倍）」+「两个引擎都播不了」这两条放在一起，
+就排除了引擎——**两个引擎现在都在搬全部视频轨，问题在输入的轨数上**。
+
+对上三个版本的表现，结论唯一：
+
+| 版本 | 视频轨 | 能播 | 杜比标 |
+|---|---|---|---|
+| v2.0.2 | `-map 0:v:0`（一条） | ✅ | ❌ |
+| v2.0.3 | `-map 0:v`（全部） | ❌ | ✅ |
+| v2.0.5 | MediaMuxer 搬全部轨 | ❌ | ✅ |
+
+**「一条视频轨 = 能播，多条 = 播不了」，三个点完全一致。**
+
+**源头是 v1.6.0 的那次改动。** 当时的说明是：
+
+> `MediaMuxerHelper` 过去只 `selectTrack` 第一条视频轨，导致 durl 直链下载到的
+> **完整 mp4**（音视频在同一文件内）重新封装时音频被静默丢弃。
+> 现在改为搬运输入文件里的**全部音视频轨**。
+
+为了修「durl 的音频丢失」，顺手把**视频轨也全搬了**。而杜比视界 Profile 7 是
+「基础层 BL + 增强层 EL」**两条视频轨**，于是：
+
+- 两条都被写进成品 → **体积正好翻倍**（583.8 × 2 = 1167.6 MB ≈ 1.13 GB）
+- 双视频轨的 mp4 不是标准形态 → **系统播放器普遍播不了**
+
+### 修复：视频轨只留一条，音频轨全留
+
+这两个需求其实互不冲突，之前是用力过猛：
+
+- **视频轨：全局只保留第一条**（作用域是所有输入，不只是单条输入），
+  成品里不可能再出现第二条
+- **音频轨：全部保留** —— 所以 durl 直链的音频照样不会丢，v1.6.0 想修的问题仍然修好了
+
+FFmpeg 路径同步改回 `-map 0:v:0`，测试断言也跟着改回来，
+并显式断言「不等于 `0:v`」，防止以后又被"优化"回去。
+
+### 关于杜比视界
+
+只取第一条视频轨时，双轨杜比视界的增强层会留在源文件里，**杜比标可能不显示**。
+这是刻意的取舍：**「能播」优先于「标好看」**。
+
+如果将来要同时拿到两者，正确做法不是把两条轨都塞进 mp4，
+而是用 FFmpeg 把增强层合并进基础层（DV Profile 8 单轨形态）——
+那是一次独立的转码工作，不该混在无损封装里做。
+
 ### v2.0.5 —— 合并回到系统 MediaMuxer（采纳用户判断）
 
 **我把合并默认切回 Android 自带的 MediaMuxer，FFmpeg 只留在工具箱。**
@@ -178,7 +227,7 @@ FFmpeg 默认会因为 strict 检查拒绝写出，产物被标成普通 `hev1` 
 修复：
 
 ```
-ffmpeg -y -i video.m4s -i audio.m4s -map 0:v -map 1:a \
+ffmpeg -y -i video.m4s -i audio.m4s -map 0:v:0 -map 1:a \
        -c copy -strict unofficial -movflags +faststart out.mp4
 ```
 
@@ -215,7 +264,7 @@ App 里本来就打包了完整 FFmpeg，`-c copy` 会正确生成 `ctts`，不�
 现在自动合并与工具箱的手动合并都优先走 FFmpeg：
 
 ```
-ffmpeg -y -i video.m4s -i audio.m4s -map 0:v -map 1:a -c copy -movflags +faststart out.mp4
+ffmpeg -y -i video.m4s -i audio.m4s -map 0:v:0 -map 1:a -c copy -movflags +faststart out.mp4
 ```
 
 - `-c copy` 保证无损，不重新编码
@@ -881,7 +930,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.5-arm64-v8a.apk
+adb install -r DownKyi-v2.0.6-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
