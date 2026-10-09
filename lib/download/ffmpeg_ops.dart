@@ -93,6 +93,52 @@ class FfmpegOps {
     return args;
   }
 
+  /// 写入元数据与嵌入封面（参考 BBDownAndroid 的元数据注入）。
+  ///
+  /// 合并产物默认只有流、没有标签：播放器里显示的是文件名而不是标题，
+  /// 也没有封面图。这条命令在不重新编码的前提下把标题 / UP 主写进
+  /// 容器元数据，并把封面作为 `attached_pic` 嵌进去。
+  ///
+  /// ⚠️ 这是 FFmpeg 重封装，与 `remux` 同属一类风险（在部分机型上对
+  /// 杜比视界等片源的兼容性不如系统 MediaMuxer）。所以它只作为
+  /// **可选开关**出现在合并之后，默认关闭。
+  ///
+  /// [hasVideo] 决定封面轨的 disposition 下标：视频文件里封面是
+  /// 第二条视频轨（v:1），纯音频文件里它是第一条（v:0）。
+  static List<String> metadata({
+    required String input,
+    required String output,
+    String? title,
+    String? artist,
+    String? coverPath,
+    bool hasVideo = true,
+  }) {
+    final hasCover = coverPath != null && coverPath.isNotEmpty;
+    final args = <String>['-y', '-i', input];
+    if (hasCover) args.addAll(<String>['-i', coverPath]);
+
+    // -map 0 保留成品的全部流（此刻成品是「一条视频 + 一条音频」，
+    // 没有多搬的风险）；封面作为第二个输入单独映射。
+    args.addAll(<String>['-map', '0']);
+    if (hasCover) args.addAll(<String>['-map', '1:0']);
+    args.addAll(<String>['-c', 'copy']);
+    if (hasCover) {
+      args.addAll(<String>[
+        '-disposition:v:${hasVideo ? 1 : 0}',
+        'attached_pic',
+      ]);
+    }
+    args.addAll(<String>['-movflags', '+faststart']);
+    if (title != null && title.isNotEmpty) {
+      args.addAll(<String>['-metadata', 'title=$title']);
+    }
+    if (artist != null && artist.isNotEmpty) {
+      args.addAll(<String>['-metadata', 'artist=$artist']);
+    }
+    args.add(output);
+    return args;
+  }
+
   /// 调整音量。只动音频滤镜，视频直接复制。
   static List<String> volume({
     required String input,

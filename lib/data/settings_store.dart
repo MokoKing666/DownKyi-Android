@@ -44,6 +44,10 @@ class SettingsStore extends ChangeNotifier {
   static const String _kDanmakuStyle = 'danmaku_style';
   static const String _kSmartAuto = 'smart_auto_select';
   static const String _kMuxEngine = 'mux_engine';
+  static const String _kTaskInterval = 'task_interval_seconds';
+  static const String _kArchiveEnabled = 'archive_enabled';
+  static const String _kAiSubtitle = 'ai_subtitle_strategy';
+  static const String _kEmbedMetadata = 'embed_metadata';
 
   static const String defaultAria2Url = 'http://127.0.0.1:6800/jsonrpc';
 
@@ -115,6 +119,21 @@ class SettingsStore extends ChangeNotifier {
 
   bool get useFfmpegForMux => muxEngine == MuxEngine.ffmpeg;
 
+  /// 任务启动间隔（秒）。0 = 不限（默认，保持 v2.0 行为）。
+  /// 批量下载时把它调到 2~5 秒可以显著降低被 B 站风控（-412）的概率。
+  int taskIntervalSeconds = 0;
+
+  /// 下载归档：跳过「以前下载过」的媒体（按 BV/分P/清晰度/编码/音轨判定）。
+  /// 默认开。关掉就能重复下载同一视频。
+  bool archiveEnabled = true;
+
+  /// AI 字幕策略（默认人工优先）
+  AiSubtitleStrategy aiSubtitleStrategy = AiSubtitleStrategy.preferHuman;
+
+  /// 合并后把标题 / UP 主 / 封面写进成品（FFmpeg，默认关）。
+  /// 属于 FFmpeg 重封装，兼容性风险见 MuxEngine 的注释。
+  bool embedMetadata = false;
+
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -170,6 +189,11 @@ class SettingsStore extends ChangeNotifier {
     subscriptionCheckEnabled = prefs.getBool(_kSubCheck) ?? true;
     subscriptionIntervalHours = prefs.getInt(_kSubInterval) ?? 6;
     muxEngine = MuxEngine.fromName(prefs.getString(_kMuxEngine));
+    taskIntervalSeconds = prefs.getInt(_kTaskInterval) ?? 0;
+    archiveEnabled = prefs.getBool(_kArchiveEnabled) ?? true;
+    aiSubtitleStrategy =
+        AiSubtitleStrategy.fromName(prefs.getString(_kAiSubtitle));
+    embedMetadata = prefs.getBool(_kEmbedMetadata) ?? false;
     preferenceMode = PreferenceMode.fromName(prefs.getString(_kPreferenceMode));
     smartAutoSelect = prefs.getBool(_kSmartAuto) ?? true;
     subtitleLanguages =
@@ -223,6 +247,10 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setInt(_kSubInterval, subscriptionIntervalHours);
     await prefs.setString(_kPreferenceMode, preferenceMode.name);
     await prefs.setString(_kMuxEngine, muxEngine.name);
+    await prefs.setInt(_kTaskInterval, taskIntervalSeconds);
+    await prefs.setBool(_kArchiveEnabled, archiveEnabled);
+    await prefs.setString(_kAiSubtitle, aiSubtitleStrategy.name);
+    await prefs.setBool(_kEmbedMetadata, embedMetadata);
     await prefs.setBool(_kSmartAuto, smartAutoSelect);
     await prefs.setString(_kSubtitleLangs, jsonEncode(subtitleLanguages));
     await prefs.setString(_kDanmakuStyle, jsonEncode(danmakuStyle.toJson()));

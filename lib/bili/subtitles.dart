@@ -1,5 +1,34 @@
 import 'models.dart';
 
+/// AI 字幕策略（参考 BBDownT 的 exclude / include / only）。
+///
+/// B 站的 AI 字幕质量参差：有些 up 主会精修，更多是纯机翻。
+/// 之前我们只有「人工优先」一条路——有 AI 就拿来兜底。
+/// 现在把选择权交出来：
+enum AiSubtitleStrategy {
+  /// 同一语言人工字幕优先，没有人工才用 AI（默认，v2.0 行为）
+  preferHuman,
+
+  /// 完全不要 AI 字幕：某语言只有 AI 时视为没有
+  excludeAi,
+
+  /// 只要 AI 字幕（少数场景：AI 字幕出得比人工快）
+  onlyAi,
+  ;
+
+  String get label => switch (this) {
+        AiSubtitleStrategy.preferHuman => '人工优先',
+        AiSubtitleStrategy.excludeAi => '不用 AI',
+        AiSubtitleStrategy.onlyAi => '只要 AI',
+      };
+
+  static AiSubtitleStrategy fromName(String? name) =>
+      AiSubtitleStrategy.values.firstWhere(
+        (value) => value.name == name,
+        orElse: () => AiSubtitleStrategy.preferHuman,
+      );
+}
+
 /// 字幕语言（评审第 21 项）。
 ///
 /// 此前字幕策略是写死的：只挑中文，挑不到就放弃。问题是
@@ -60,18 +89,27 @@ class SubtitleLanguage {
   /// 按用户想要的语言挑字幕。
   ///
   /// - 顺序按 [wanted]，保证「主要语言」排在前面
-  /// - 同一语言的人工字幕优先于 AI 字幕（[SubtitleItem.isAi]）
+  /// - [aiStrategy] 控制 AI 字幕的取舍（见 [AiSubtitleStrategy]）
   /// - 每种语言只取一条
   static List<SubtitleItem> select(
     List<SubtitleItem> available,
-    List<String> wanted,
-  ) {
+    List<String> wanted, {
+    AiSubtitleStrategy aiStrategy = AiSubtitleStrategy.preferHuman,
+  }) {
     if (wanted.isEmpty || available.isEmpty) return const <SubtitleItem>[];
+
+    final pool = switch (aiStrategy) {
+      AiSubtitleStrategy.preferHuman => available,
+      AiSubtitleStrategy.excludeAi =>
+        available.where((item) => !item.isAi).toList(),
+      AiSubtitleStrategy.onlyAi =>
+        available.where((item) => item.isAi).toList(),
+    };
 
     final result = <SubtitleItem>[];
     for (final code in wanted) {
       SubtitleItem? best;
-      for (final item in available) {
+      for (final item in pool) {
         if (normalize(item.lan) != code) continue;
         // 人工字幕优先；都是人工或都是 AI 时保留先出现的那条
         if (best == null || (best.isAi && !item.isAi)) best = item;

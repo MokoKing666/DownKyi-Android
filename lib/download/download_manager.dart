@@ -13,8 +13,10 @@ import '../data/download_task.dart';
 import '../data/http_client.dart';
 import '../bili/models.dart';
 import '../bili/subtitles.dart';
+import 'download_archive.dart';
 import 'ffmpeg_ops.dart';
 import 'ffmpeg_service.dart';
+import 'start_throttle.dart';
 import '../data/settings_store.dart';
 import '../data/task_dao.dart';
 import '../native/bridge.dart';
@@ -164,6 +166,25 @@ class DownloadManager extends ChangeNotifier {
       return null;
     }
 
+    // 下载归档：以前下过的媒体（同 BV/分P/清晰度/编码/音轨）直接跳过，
+    // 防止「清理任务列表后把旧视频再下一遍」。设置里可关。
+    if (settings.archiveEnabled) {
+      final archived = await DownloadArchive.instance.contains(
+        DownloadArchive.mediaKey(
+          bvid: item.bvid,
+          cid: item.cid,
+          epId: item.epId,
+          quality: quality,
+          codec: codec,
+          audioId: audioId,
+        ),
+      );
+      if (archived) {
+        AppLog.d('Task', '已下载过（归档命中），跳过：${item.title}');
+        return null;
+      }
+    }
+
     final task = DownloadTask(
       key: key,
       title: item.title,
@@ -257,17 +278,38 @@ class DownloadManager extends ChangeNotifier {
     return '${date.year}${two(date.month)}${two(date.day)}';
   }
 
+  /// 任务启动节流（设置里的「任务启动间隔」，默认 0 = 不限）
+  final StartThrottle _throttle = StartThrottle();
+
+  /// 被节流住时用来延迟补一次 _pump 的计时器
+  Timer? _delayedPump;
+
   void _pump() {
+    // 每次泵前先取消挂起的延迟泵，避免计时器叠起来
+    _delayedPump?.cancel();
+    _delayedPump = null;
+
+    _throttle.intervalSeconds = settings.taskIntervalSeconds;
     final maxConcurrent = settings.concurrentTasks.clamp(1, 5);
     var running = _jobs.length;
+    var waitMs = 0;
     for (final task in tasks) {
       if (running >= maxConcurrent) break;
       if (task.status != TaskStatus.queued) continue;
       if (_jobs.containsKey(task.id)) continue;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (!_throttle.tryAcquire(now)) {
+        // 间隔没到：不再启动新任务，记下要等多久，到点后再泵一次
+        waitMs = _throttle.remainingMs(now);
+        break;
+      }
       final job = _Job(task, CancelToken());
       _jobs[task.id] = job;
       running++;
       unawaited(_execute(job));
+    }
+    if (waitMs > 0) {
+      _delayedPump = Timer(Duration(milliseconds: waitMs), _pump);
     }
     _syncTicker();
   }
@@ -537,6 +579,21 @@ class DownloadManager extends ChangeNotifier {
     task.downloadedBytes = task.totalBytes;
     _completedCount++;
     _lastCompletedTitle = task.title;
+    // 写进下载归档：下次再遇到同一个媒体（同 BV/分P/清晰度/编码/音轨）
+    // 直接跳过。只在真的下了媒体流时记录——纯封面/弹幕任务不构成
+    // 「这个视频我已经有了」。
+    if (task.wantVideo || task.wantAudio) {
+      unawaited(DownloadArchive.instance.add(
+        DownloadArchive.mediaKey(
+          bvid: task.bvid,
+          cid: task.cid,
+          epId: task.epId,
+          quality: task.quality,
+          codec: task.codec,
+          audioId: task.audioId,
+        ),
+      ));
+    }
     await _dao.update(task);
     notifyListeners();
   }
@@ -828,8 +885,11 @@ class DownloadManager extends ChangeNotifier {
             cid: task.cid, bvid: task.bvid, epId: task.epId);
         // 多语言：按设置里的语言列表逐个落盘，文件名带语言后缀。
         // 之前只挑「含 zh 的第一条」并固定写成 video.srt，想要中英双字是做不到的。
-        final chosen =
-            SubtitleLanguage.select(subtitles, settings.subtitleLanguages);
+        final chosen = SubtitleLanguage.select(
+          subtitles,
+          settings.subtitleLanguages,
+          aiStrategy: settings.aiSubtitleStrategy,
+        );
         if (chosen.isEmpty && subtitles.isNotEmpty) {
           // 有字幕但没有用户要的语言，明确报出来而不是静默成功
           failed.add('字幕（没有 ${settings.subtitleSummary}）');
@@ -892,6 +952,67 @@ class DownloadManager extends ChangeNotifier {
       return await file.exists() ? await file.length() : 0;
     } catch (_) {
       return 0;
+    }
+  }
+
+  /// 可选的元数据注入（参考 BBDownAndroid）：把标题 / UP 主写进容器标签，
+  /// 封面嵌为 attached_pic。
+  ///
+  /// 设计约束：**任何失败都不允许影响成品**。FFmpeg 不可用、封面下不来、
+  /// 写出失败——全部只记日志，原文件原样保留。
+  Future<void> _injectMetadata(
+    DownloadTask task,
+    String output,
+    String extension, {
+    required bool hasVideo,
+  }) async {
+    if (!BuildFlavor.supportsFfmpeg) return;
+    if (FfmpegService.isBusy) {
+      AppLog.d('Task', 'FFmpeg 正忙，跳过元数据注入');
+      return;
+    }
+
+    String? coverPath;
+    try {
+      // 封面是可选的：下不来就只写文本标签
+      if (task.cover.isNotEmpty) {
+        final bytes = await api.http
+            .getBytes(Uri.parse(task.cover), referer: BiliConst.webBase);
+        if (bytes.isNotEmpty) {
+          coverPath = '$output.cover.jpg';
+          await File(coverPath).writeAsBytes(bytes, flush: true);
+        }
+      }
+
+      final temp = '$output.meta.$extension';
+      final result = await FfmpegService.run(
+        FfmpegOps.metadata(
+          input: output,
+          output: temp,
+          title: task.title,
+          artist: task.subTitle,
+          coverPath: coverPath,
+          hasVideo: hasVideo,
+        ),
+      );
+      if (!result.success) {
+        AppLog.e('Task', '元数据注入失败（保留原文件）');
+        await _deleteFile(temp);
+        return;
+      }
+      final tempFile = File(temp);
+      if (!await tempFile.exists() || await tempFile.length() < 1024) {
+        AppLog.e('Task', '元数据注入产物异常（保留原文件）');
+        await _deleteFile(temp);
+        return;
+      }
+      await _deleteFile(output);
+      await tempFile.rename(output);
+      AppLog.d('Task', '已写入元数据${coverPath != null ? '与封面' : ''}：${task.title}');
+    } catch (error) {
+      AppLog.e('Task', '元数据注入异常（保留原文件）', error);
+    } finally {
+      if (coverPath != null) await _deleteFile(coverPath);
     }
   }
 
@@ -977,6 +1098,15 @@ class DownloadManager extends ChangeNotifier {
       // 体积和「能不能播」都可能看起来正常/异常得莫名其妙，
       // 只有把成品探测一次才拿得到事实。前几轮排查全靠推理，就是缺这一行。
       await _logOutputProbe(output);
+
+      // 可选：把标题 / UP 主 / 封面写进成品（FFmpeg，设置里默认关）。
+      // 任何一步失败都只记日志、保留原成品——元数据是锦上添花，
+      // 绝不能反过来弄坏文件。
+      if (settings.embedMetadata) {
+        await _injectMetadata(task, output, extension,
+            hasVideo: videoPath != null);
+      }
+
       await _deleteFile(videoPath);
       await _deleteFile(audioPath);
 

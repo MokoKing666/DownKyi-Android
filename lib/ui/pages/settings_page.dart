@@ -9,6 +9,7 @@ import '../../core/constants.dart';
 import '../../core/logger.dart';
 import '../../data/http_client.dart';
 import '../../data/settings_store.dart';
+import '../../download/download_archive.dart';
 import '../../download/download_manager.dart';
 import '../../download/download_rules.dart';
 import '../../subscription/subscription_scheduler.dart';
@@ -240,6 +241,25 @@ class SettingsPage extends StatelessWidget {
                   onSelect: (value) => settings
                       .update(() => settings.segmentConcurrency = value),
                 ),
+                const SizedBox(height: TdSpacer.medium),
+                Text(
+                    '任务启动间隔：${settings.taskIntervalSeconds == 0 ? '不限' : '${settings.taskIntervalSeconds} 秒'}',
+                    style: TdText.bodyMedium),
+                const SizedBox(height: TdSpacer.xs),
+                TdChoiceGroup<int>(
+                  items: const <int>[0, 2, 5, 10],
+                  selected: settings.taskIntervalSeconds,
+                  labelBuilder: (value) => value == 0 ? '不限' : '$value 秒',
+                  onSelect: (value) => settings
+                      .update(() => settings.taskIntervalSeconds = value),
+                ),
+                const SizedBox(height: TdSpacer.xs),
+                Text(
+                  '批量下载时把任务启动错开，能显著降低被 B 站风控（-412）的概率。'
+                  '只在批量下载经常失败时才需要调。',
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
               ],
             ),
           ),
@@ -280,12 +300,24 @@ class SettingsPage extends StatelessWidget {
           TdSection(
             title: '字幕',
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 TDCell(
                   title: '下载语言',
                   description: settings.subtitleSummary,
                   arrow: true,
                   onClick: (cell) => _pickSubtitleLanguages(context, settings),
+                ),
+                const SizedBox(height: TdSpacer.small),
+                Text('AI 字幕：${settings.aiSubtitleStrategy.label}',
+                    style: TdText.bodyMedium),
+                const SizedBox(height: TdSpacer.xs),
+                TdChoiceGroup<AiSubtitleStrategy>(
+                  items: AiSubtitleStrategy.values,
+                  selected: settings.aiSubtitleStrategy,
+                  labelBuilder: (value) => value.label,
+                  onSelect: (value) => settings
+                      .update(() => settings.aiSubtitleStrategy = value),
                 ),
               ],
             ),
@@ -310,6 +342,15 @@ class SettingsPage extends StatelessWidget {
                   settings.muxEngine.description,
                   style: TdText.bodySmall
                       .copyWith(color: TdPalette.textPlaceholder),
+                ),
+                const SizedBox(height: TdSpacer.small),
+                TdSwitchRow(
+                  title: '写入标题与封面',
+                  description: '合并后把标题 / UP 主 / 封面嵌入成品（FFmpeg，'
+                      '部分机型对杜比视界片源可能不兼容，出问题请关闭）',
+                  value: settings.embedMetadata,
+                  onChanged: (value) =>
+                      settings.update(() => settings.embedMetadata = value),
                 ),
               ],
             ),
@@ -426,6 +467,35 @@ class SettingsPage extends StatelessWidget {
                   value: settings.downloadSubtitle,
                   onChanged: (value) =>
                       settings.update(() => settings.downloadSubtitle = value),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 下载归档 ----------------
+          TdSection(
+            title: '下载归档',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TdSwitchRow(
+                  title: '跳过已下载过的视频',
+                  description: '按 BV / 分P / 清晰度 / 编码判定；追更时不会重复下载旧视频',
+                  value: settings.archiveEnabled,
+                  onChanged: (value) =>
+                      settings.update(() => settings.archiveEnabled = value),
+                ),
+                TDCell(
+                  title: '清除归档记录',
+                  description: '清除后允许重新下载以前下过的视频',
+                  arrow: true,
+                  onClick: (cell) async {
+                    final count = await DownloadArchive.instance.clear();
+                    if (context.mounted) {
+                      tdToast(context, '已清除 $count 条归档记录');
+                    }
+                  },
                 ),
               ],
             ),

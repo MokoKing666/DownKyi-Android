@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.0.9（versionCode 23） |
+| 版本 | v2.1.0（versionCode 24） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -114,7 +114,49 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 
 ## 🧾 更新日志
 
-### v2.0.9
+### v2.1.0 —— 参考 BBDownT / BBDownAndroid 的四项补强
+
+对照 [BBDownT](https://github.com/LOVAHE/BBDownT) 与
+[BBDownAndroid](https://github.com/xialiag/BBDownAndroid) 做了差距分析，
+挑出四个我们有缺口、且低风险可验证的功能。其余如 serve API、TV 登录、
+BiliPlus 代理要么体量太大、要么不适合移动端，没有采纳。
+
+**任务启动间隔（防风控，对应 BBDownT `--delay-per-video`）**
+
+批量加入任务时，队列泵以前会在同一瞬间把「解析地址 → 探测 → 建分片」
+全部打出去，容易触发 B 站风控（-412），表现是「批量下载总有几个失败」。
+现在可以在「设置 - 并发」里把任务启动间隔调成 2 / 5 / 10 秒，
+任务会错开启动。默认「不限」，保持旧行为。
+
+**下载归档（对应 BBDownT `--save-archives-to-file`）**
+
+以前「清理已完成任务」之后，同一个视频还能再下一遍——追更场景下
+每周订阅检查都会把旧视频重复下载。现在按媒体身份
+（BV / 分P / 清晰度 / 编码 / 音轨）记录归档，命中就直接跳过。
+归档上限 5000 条、FIFO 淘汰；「设置 - 下载归档」里可以关闭或清除。
+
+**AI 字幕策略（对应 BBDownT 的 AI 字幕选项）**
+
+以前只会「人工优先、AI 兜底」。现在可选：人工优先（默认）/ 不用 AI / 只要 AI。
+「不用 AI」适合不想要机翻字幕的人：某语言只有 AI 字幕时视为没有。
+
+**写入标题与封面（对应 BBDownAndroid 的元数据注入）**
+
+合并产物以前只有流没有标签，播放器里显示的是文件名。开启后会在合并完成时
+把标题 / UP 主写进容器元数据、封面嵌为 attached_pic（FFmpeg，不重编码）。
+
+> 默认**关闭**：这属于 FFmpeg 重封装，与「合并方式」里的 FFmpeg 选项同属一类
+> 兼容性风险（部分机型对杜比视界片源可能不兼容）。任何一步失败都只记日志、
+> 保留原成品，绝不会反过来弄坏文件。
+
+**顺带修掉的一个环境问题**
+
+本次开发中发现 `third_party/tdesign_flutter` 的内容与 pub 缓存不一致
+（混入了一个只有更新版 Flutter 才有的 `ScrollCacheExtent` API，
+导致所有涉及 UI 的测试编译失败）。重新执行 `tools/prepare_tdesign.ps1` 后恢复。
+测试 191 → 217。
+
+### v2.0.9 —— 时长单位修复、夜间模式勾选框、更新日志重写
 
 **新增功能**
 
@@ -408,7 +450,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.0.9-arm64-v8a.apk
+adb install -r DownKyi-v2.1.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
