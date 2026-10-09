@@ -253,6 +253,49 @@ class TdSwitchRow extends StatelessWidget {
   }
 }
 
+/// 官方 `TDCheckbox` 的统一入口。
+///
+/// 唯一的存在理由是 [TDCheckbox.backgroundColor]：tdesign_flutter 0.2.7 的
+/// `TDCheckbox` 会给外层 `Container` **无条件**填上 `bgColorContainer`
+/// （见 `td_check_box.dart` L418-421，连 `cardMode` 都不判断）。
+/// 于是勾选框在「卡片底色之外」的任何背景上都会露出一块自己的色块——
+/// 暗色模式下尤其扎眼，用户反馈为「圆圈外面还有方框」。
+///
+/// 传 `Colors.transparent` 即可消除，这是组件自己支持的参数，
+/// 不需要自绘、也不需要改包。这里统一封装一次，避免以后新增页面时漏掉。
+class TdCheckboxField extends StatelessWidget {
+  const TdCheckboxField({
+    super.key,
+    required this.checked,
+    required this.onChanged,
+    this.title,
+    this.subTitle,
+    this.subTitleMaxLine = 2,
+  });
+
+  final bool checked;
+  final ValueChanged<bool> onChanged;
+  final String? title;
+  final String? subTitle;
+  final int subTitleMaxLine;
+
+  @override
+  Widget build(BuildContext context) {
+    return TDCheckbox(
+      checked: checked,
+      size: TDCheckBoxSize.small,
+      insetSpacing: 0,
+      showDivider: false,
+      // 关键：不传就会拿到 bgColorContainer，在暗色下就是那块方框
+      backgroundColor: Colors.transparent,
+      title: title,
+      subTitle: subTitle,
+      subTitleMaxLine: subTitleMaxLine,
+      onCheckBoxChanged: onChanged,
+    );
+  }
+}
+
 /// 勾选行
 class TdCheckRow extends StatelessWidget {
   const TdCheckRow({
@@ -277,7 +320,11 @@ class TdCheckRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _CheckMark(checked: value),
+            // 用官方勾选框（圆形样式，与其余页面一致）
+            TdCheckboxField(
+              checked: value,
+              onChanged: onChanged,
+            ),
             const SizedBox(width: TdSpacer.small),
             Expanded(
               child: Column(
@@ -299,42 +346,6 @@ class TdCheckRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 自绘勾选框。
-///
-/// 这里刻意**不用 tdesign 的 `TDCheckbox`**：它的配色只有一部分跟着我们注入的
-/// `colorMap` 走，未选中态本该是透明的，在夜间模式下却会残留一块**白色方底**
-/// （用户实测反馈「不是透明度的、有方形白边」）。
-///
-/// 自绘只用 `TdPalette`——它由 `TdPalette.apply()` 按当前主题整体注入，
-/// 不存在「漏掉某个颜色」的可能，从根上避免这一类问题。
-class _CheckMark extends StatelessWidget {
-  const _CheckMark({required this.checked});
-
-  final bool checked;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      width: 20,
-      height: 20,
-      margin: const EdgeInsets.only(top: 1),
-      decoration: BoxDecoration(
-        // 未选中是纯描边（透明底），选中才是实心品牌色
-        color: checked ? TdPalette.brand : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: checked ? TdPalette.brand : TdPalette.textPlaceholder,
-          width: 1.5,
-        ),
-      ),
-      child: checked
-          ? const Icon(Icons.check, size: 14, color: Colors.white)
-          : null,
     );
   }
 }

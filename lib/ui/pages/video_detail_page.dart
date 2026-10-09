@@ -123,15 +123,12 @@ class VideoDetailPage extends StatelessWidget {
           for (var index = 0; index < video.pages.length; index++)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
-              child: TDCheckbox(
+              child: TdCheckboxField(
                 key: ValueKey<String>('page_$index'),
                 title: video.pages[index].part,
                 subTitle: formatDuration(video.pages[index].durationMs),
                 checked: parse.selectedPages.contains(index),
-                size: TDCheckBoxSize.small,
-                insetSpacing: 0,
-                showDivider: false,
-                onCheckBoxChanged: (checked) {
+                onChanged: (checked) {
                   parse.togglePage(index);
                   if (checked && parse.selectedPages.length == 1) {
                     parse.loadQualities();

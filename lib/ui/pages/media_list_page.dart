@@ -83,13 +83,9 @@ class MediaListPage extends StatelessWidget {
                             ? '${item.bvid}${item.epId == null ? '' : ' · ep${item.epId}'}'
                             : item.ownerName,
                         durationMs: item.durationMs,
-                        leading: TDCheckbox(
+                        leading: TdCheckboxField(
                           checked: parse.isBatchSelected(item),
-                          size: TDCheckBoxSize.small,
-                          insetSpacing: 0,
-                          showDivider: false,
-                          onCheckBoxChanged: (checked) =>
-                              parse.toggleBatchItem(item),
+                          onChanged: (checked) => parse.toggleBatchItem(item),
                         ),
                         onTap: () => parse.toggleBatchItem(item),
                       );

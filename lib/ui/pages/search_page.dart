@@ -211,12 +211,9 @@ class _SearchPageState extends State<SearchPage> {
               ? item.bvid
               : '${item.ownerName} · ${item.bvid}',
           durationMs: item.durationMs,
-          leading: TDCheckbox(
+          leading: TdCheckboxField(
             checked: _selected.contains(item.bvid),
-            size: TDCheckBoxSize.small,
-            insetSpacing: 0,
-            showDivider: false,
-            onCheckBoxChanged: (_) => _toggle(item),
+            onChanged: (_) => _toggle(item),
           ),
           // 点整行 = 直接解析这个视频（单下载）；批量靠左侧复选框
           onTap: () => unawaited(_openVideo(item)),

@@ -311,8 +311,17 @@ class AppThemeTokens {
         'textColorBrand': brand,
         'textColorLink': brandActive,
         // 描边
+        //
+        // 两个 key 的语义不同，别混用：
+        // - componentStrokeColor：发丝线（分隔线、组件内部细线），浅是应该的
+        // - componentBorderColor：**组件轮廓**（勾选框圆圈、步进器、标签边框）
+        //
+        // 之前把 componentBorderColor 也映射成 divider，结果是未选中的勾选框
+        // 圆圈在两种主题下都几乎看不见（亮色 #F1F2F3 / 暗色 #26272B），
+        // 用户只能看到它背后那块底色，反馈成「圆圈外面有方框」。
+        // 官方默认亮色是 #DCDCDC 量级，所以就按「中等灰」给它取色。
         'componentStrokeColor': border,
-        'componentBorderColor': divider,
+        'componentBorderColor': brightness == Brightness.dark ? gray6 : gray4,
       };
 
   /// Material 层配色（TextField / AlertDialog / BottomSheet 等跟随换肤）

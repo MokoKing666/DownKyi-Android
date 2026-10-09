@@ -165,12 +165,9 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            TDCheckbox(
+            TdCheckboxField(
               checked: checked,
-              size: TDCheckBoxSize.small,
-              insetSpacing: 0,
-              showDivider: false,
-              onCheckBoxChanged: (_) => _toggle(group),
+              onChanged: (_) => _toggle(group),
             ),
             Expanded(
               child: Column(

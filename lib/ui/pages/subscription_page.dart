@@ -448,12 +448,9 @@ class _SubscriptionItemsPageState extends State<SubscriptionItemsPage> {
                                 ? item.bvid
                                 : 'ep${item.epId}',
                             durationMs: item.durationMs,
-                            leading: TDCheckbox(
+                            leading: TdCheckboxField(
                               checked: _selected.contains(item.key),
-                              size: TDCheckBoxSize.small,
-                              insetSpacing: 0,
-                              showDivider: false,
-                              onCheckBoxChanged: (_) => _toggle(item),
+                              onChanged: (_) => _toggle(item),
                             ),
                             onTap: () => _toggle(item),
                           );

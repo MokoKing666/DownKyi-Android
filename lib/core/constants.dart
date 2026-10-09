@@ -4,7 +4,7 @@ library;
 class AppInfo {
   static const String name = '哔哩哔哩下载姬';
   static const String englishName = 'DownKyi';
-  static const String version = '2.2.0';
+  static const String version = '2.2.1';
   static const String disclaimer = '本应用仅提供视频解析与本地下载能力，不提供任何内容存储服务。'
       '所有内容版权归原作者所有，仅供个人学习交流，请勿用于商业用途，并支持原始发布者。';
 }

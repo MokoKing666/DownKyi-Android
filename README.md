@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.2.0（versionCode 25） |
+| 版本 | v2.2.1（versionCode 26） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,23 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v2.2.1 —— 修复勾选框在暗色模式下多出一块方框
+
+勾选框（搜索、收藏夹、订阅、视频分 P、清理缓存这些地方）在暗色模式下，
+圆圈外面会多出一块方形色块，而圆圈本身反而几乎看不见。
+
+两个原因：
+
+- 组件会给勾选框自己垫一块**卡片底色**，一旦它不在卡片上，这块底色就露出来；
+- 它的「未选中描边色」被我们映射成了分隔线那种很浅的颜色，
+  在深色背景上几乎看不到圆圈，于是只剩下那块方框。
+
+修复：勾选框底色改为透明、未选中描边改用正常的对比度。
+
+顺便把之前**自绘**的勾选框换回了 TDesign 官方组件——那次自绘是过度反应：
+官方组件本来就支持传底色，当时没发现，结果页面上同时存在两种样式的勾选框
+（自绘的圆角方块和官方的圆圈）。现在全app统一用官方组件。
 
 ### v2.2.0 —— 下载与恢复更稳
 
@@ -494,7 +511,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.2.0-arm64-v8a.apk
+adb install -r DownKyi-v2.2.1-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。
