@@ -790,37 +790,30 @@ class _ToolEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: <Widget>[
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: TdPalette.brandLight,
-                    borderRadius: BorderRadius.circular(TdRadius.medium),
-                  ),
-                  child: Icon(icon, size: 19, color: TdPalette.brand),
-                ),
-                const SizedBox(width: TdSpacer.small),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(title, style: TdText.bodyLarge),
-                      const SizedBox(height: 2),
-                      Text(description, style: TdText.bodySmall),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 20, color: TdPalette.gray6),
-              ],
+        // 官方 TDCell：图标走 leftIconWidget，箭头用组件自带的 arrow
+        TDCell(
+          title: title,
+          description: description,
+          leftIconWidget: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: TdPalette.brandLight,
+              borderRadius: BorderRadius.circular(TdRadius.medium),
             ),
+            child: Icon(icon, size: 19, color: TdPalette.brand),
           ),
+          arrow: true,
+          hover: false,
+          bordered: false,
+          style: TDCellStyle(
+            context: context,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            backgroundColor: Colors.transparent,
+            titleStyle: TdText.bodyLarge,
+            descriptionStyle: TdText.bodySmall,
+          ),
+          onClick: (cell) => onTap(),
         ),
         if (showDivider) TDDivider(height: 0.5, color: TdPalette.divider),
       ],
@@ -859,15 +852,14 @@ class _ConvertDialog extends StatelessWidget {
               builder: (context, value, _) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(TdRadius.round),
-                    child: LinearProgressIndicator(
-                      value: value <= 0 ? null : value.clamp(0.0, 1.0),
-                      minHeight: 6,
-                      backgroundColor: TdPalette.gray2,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(TdPalette.brand),
-                    ),
+                  TDProgress(
+                    type: TDProgressType.linear,
+                    value: value <= 0 ? 0 : value.clamp(0.0, 1.0),
+                    strokeWidth: 6,
+                    color: TdPalette.brand,
+                    backgroundColor: TdPalette.gray2,
+                    showLabel: false,
+                    linearBorderRadius: BorderRadius.circular(TdRadius.round),
                   ),
                   const SizedBox(height: TdSpacer.xs),
                   Text(

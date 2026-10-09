@@ -148,25 +148,13 @@ class _ParsePageState extends State<ParsePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Container(
-                    decoration: BoxDecoration(
-                      color: TdPalette.gray1,
-                      borderRadius: BorderRadius.circular(TdRadius.medium),
-                    ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: TdSpacer.small),
-                    child: TextField(
-                      controller: _controller,
-                      maxLines: 4,
-                      minLines: 3,
-                      style: TdText.bodyMedium,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        hintText: '粘贴视频链接 / BV 号 / ep、ss 号 / 收藏夹 / 合集链接',
-                        hintStyle: TextStyle(
-                            color: TdPalette.textPlaceholder, fontSize: 14),
-                      ),
-                    ),
+                  // 官方多行输入框，替代自绘的容器 + TextField
+                  TDTextarea(
+                    controller: _controller,
+                    maxLines: 4,
+                    minLines: 3,
+                    hintText: '粘贴视频链接 / BV 号 / ep、ss 号 / 收藏夹 / 合集链接',
+                    backgroundColor: TdPalette.gray1,
                   ),
                   const SizedBox(height: TdSpacer.small),
                   Row(
@@ -472,24 +460,22 @@ class _ParsePageState extends State<ParsePage> {
     final controller = TextEditingController();
     final mid = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('输入 UP 主 UID', style: TdText.titleSmall),
-        content: TextField(
+      builder: (dialogContext) => TDAlertDialog(
+        title: '输入 UP 主 UID',
+        contentWidget: TDInput(
           controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(hintText: '例如 2（可在空间地址里找到）'),
+          inputType: TextInputType.number,
+          hintText: '例如 2（可在空间地址里找到）',
+          backgroundColor: TdPalette.gray1,
         ),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消')),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('确定'),
-          ),
-        ],
+        leftBtn: TDDialogButtonOptions(
+          title: '取消',
+          action: () => Navigator.of(dialogContext).pop(),
+        ),
+        rightBtn: TDDialogButtonOptions(
+          title: '确定',
+          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+        ),
       ),
     );
     if (mid == null || mid.isEmpty) return;

@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.2.1（versionCode 26） |
+| 版本 | v2.3.0（versionCode 27） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -113,6 +113,28 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 ---
 
 ## 🧾 更新日志
+
+### v2.3.0 —— 界面控件统一到 TDesign
+
+把项目里还在「自己画」的控件全部换成官方组件，风格统一、以后只维护一套。
+
+| 原来是 | 现在 |
+|---|---|
+| 自绘选择芯片（清晰度 / 编码 / 音轨 / 偏好模式） | `TDSelectTag` |
+| 自绘小标签（时长角标、画质标签） | `TDTag` |
+| 自绘容器 + `TextField`（搜索 / 链接 / Cookie） | `TDSearchBar`、`TDTextarea` |
+| `AlertDialog` + `TextField` 弹窗 | `TDAlertDialog`、`TDConfirmDialog` |
+| 转圈 / 进度条 | `TDLoading`、`TDProgress` |
+| 自绘点击行（工具条目、缓存分组、主题外观、勾选行） | `TDCell` |
+| 自绘主题按钮 | `TDButton` |
+
+能看出来的变化：**勾选框统一成圆形**（此前自绘的是圆角方块，两种样式并存）；
+加载动画换成 TDesign 的转圈；弹窗的圆角、按钮、遮罩都跟着组件库走。
+
+**仍然自绘的两处**（包内确实没有对应组件，已确认）：
+
+- 分段控件（「进行中 / 已完成」）——0.2.7 的分段器实现在包里不存在；
+- 少数弹层的骨架，下一步再迁到 `TDPopupBottom*Panel`。
 
 ### v2.2.1 —— 修复勾选框在暗色模式下多出一块方框
 
@@ -511,7 +533,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.2.1-arm64-v8a.apk
+adb install -r DownKyi-v2.3.0-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

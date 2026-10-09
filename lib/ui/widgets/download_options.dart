@@ -332,26 +332,21 @@ class DownloadOptionsPanel extends StatelessWidget {
     final controller = TextEditingController(text: settings.downloadDir);
     final value = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('自定义下载目录', style: TdText.titleSmall),
-        content: TextField(
+      builder: (dialogContext) => TDAlertDialog(
+        title: '自定义下载目录',
+        contentWidget: TDInput(
           controller: controller,
-          decoration: const InputDecoration(
-            hintText: '例如 /storage/emulated/0/Download/DownKyi',
-          ),
+          hintText: '例如 /storage/emulated/0/Download/DownKyi',
+          backgroundColor: TdPalette.gray1,
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
+        leftBtn: TDDialogButtonOptions(
+          title: '取消',
+          action: () => Navigator.of(dialogContext).pop(),
+        ),
+        rightBtn: TDDialogButtonOptions(
+          title: '保存',
+          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+        ),
       ),
     );
     if (value == null) return;

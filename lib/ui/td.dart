@@ -313,39 +313,23 @@ class TdCheckRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => onChanged(!value),
-      child: Padding(
+    // 整行用官方 TDCell：hover 反馈、行内边距、标题/说明排版都交给组件库。
+    // padding 与底色保持我们原来的值，避免外层卡片出现二次留白。
+    return TDCell(
+      title: title,
+      description: description,
+      leftIconWidget: TdCheckboxField(checked: value, onChanged: onChanged),
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
         padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            // 用官方勾选框（圆形样式，与其余页面一致）
-            TdCheckboxField(
-              checked: value,
-              onChanged: onChanged,
-            ),
-            const SizedBox(width: TdSpacer.small),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(title, style: TdText.bodyMedium),
-                  if (description != null &&
-                      description!.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 2),
-                    Text(
-                      description!,
-                      style: TdText.bodySmall
-                          .copyWith(color: TdPalette.textPlaceholder),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyMedium,
+        descriptionStyle:
+            TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
       ),
+      onClick: (cell) => onChanged(!value),
     );
   }
 }
@@ -364,15 +348,15 @@ class TdLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = color ?? TdPalette.brand;
-    return Container(
+    // 用官方 TDTag：它的 textColor / backgroundColor 支持直接覆盖，
+    // 所以既能统一到官方组件，又能保留调用点传进来的配色。
+    return TDTag(
+      text,
+      size: TDTagSize.small,
+      shape: TDTagShape.square,
+      textColor: color ?? TdPalette.brand,
+      backgroundColor: background ?? TdPalette.brandLight,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: background ?? TdPalette.brandLight,
-        borderRadius: BorderRadius.circular(TdRadius.small),
-      ),
-      child: Text(text,
-          style: TextStyle(fontSize: 11, color: foreground, height: 1.3)),
     );
   }
 }
@@ -449,7 +433,10 @@ class TdLoadingView extends StatelessWidget {
   }
 }
 
-/// 确认弹窗（TDesign 视觉规范）
+/// 确认弹窗。
+///
+/// 直接转发到官方 `TDAlertDialog`：按钮样式、圆角、遮罩、危险色
+/// 都由组件库按当前主题决定，我们不再自绘一套。
 Future<bool> tdConfirm(
   BuildContext context, {
   required String title,
@@ -460,53 +447,17 @@ Future<bool> tdConfirm(
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => Dialog(
-      backgroundColor: TdPalette.container,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(TdRadius.extraLarge)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(title, style: TdText.titleMedium, textAlign: TextAlign.center),
-            if (content != null && content.isNotEmpty) ...<Widget>[
-              const SizedBox(height: TdSpacer.small),
-              Text(
-                content,
-                style:
-                    TdText.bodyMedium.copyWith(color: TdPalette.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-            ],
-            const SizedBox(height: TdSpacer.large),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: TDButton(
-                    text: cancelText,
-                    theme: TDButtonTheme.light,
-                    size: TDButtonSize.large,
-                    isBlock: true,
-                    onTap: () => Navigator.of(dialogContext).pop(false),
-                  ),
-                ),
-                const SizedBox(width: TdSpacer.small),
-                Expanded(
-                  child: TDButton(
-                    text: confirmText,
-                    theme:
-                        danger ? TDButtonTheme.danger : TDButtonTheme.primary,
-                    size: TDButtonSize.large,
-                    isBlock: true,
-                    onTap: () => Navigator.of(dialogContext).pop(true),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+    builder: (dialogContext) => TDAlertDialog(
+      title: title,
+      content: content,
+      leftBtn: TDDialogButtonOptions(
+        title: cancelText,
+        action: () => Navigator.of(dialogContext).pop(false),
+      ),
+      rightBtn: TDDialogButtonOptions(
+        title: confirmText,
+        theme: danger ? TDButtonTheme.danger : TDButtonTheme.primary,
+        action: () => Navigator.of(dialogContext).pop(true),
       ),
     ),
   );

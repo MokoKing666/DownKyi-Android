@@ -138,24 +138,14 @@ class _SearchPageState extends State<SearchPage> {
       child: Row(
         children: <Widget>[
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: TdPalette.gray1,
-                borderRadius: BorderRadius.circular(TdRadius.medium),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
-              child: TextField(
-                controller: _controller,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => unawaited(_search()),
-                style: TdText.bodyMedium,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintText: '搜索视频 / UP 主投稿',
-                  hintStyle:
-                      TextStyle(color: TdPalette.textPlaceholder, fontSize: 14),
-                ),
-              ),
+            // 官方搜索框，替代自绘的容器 + TextField
+            child: TDSearchBar(
+              controller: _controller,
+              placeHolder: '搜索视频 / UP 主投稿',
+              style: TDSearchStyle.square,
+              backgroundColor: TdPalette.gray1,
+              padding: EdgeInsets.zero,
+              onSubmitted: (_) => unawaited(_search()),
             ),
           ),
           const SizedBox(width: TdSpacer.small),
@@ -172,7 +162,12 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const Center(
+        child:
+            TDLoading(size: TDLoadingSize.medium, icon: TDLoadingIcon.circle),
+      );
+    }
     final error = _error;
     if (error != null) {
       return TdEmptyView(

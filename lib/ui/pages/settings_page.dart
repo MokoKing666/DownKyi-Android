@@ -851,26 +851,25 @@ class SettingsPage extends StatelessWidget {
     bool obscure = false,
   }) async {
     final controller = TextEditingController(text: initial);
+    // 用 TDesign 的对话框 + 输入框，而不是 Material 的 AlertDialog + TextField
     final value = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text(title, style: TdText.titleSmall),
-        content: TextField(
+      builder: (dialogContext) => TDAlertDialog(
+        title: title,
+        contentWidget: TDInput(
           controller: controller,
           obscureText: obscure,
-          decoration: InputDecoration(hintText: hint),
+          hintText: hint,
+          backgroundColor: TdPalette.gray1,
         ),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消')),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
+        leftBtn: TDDialogButtonOptions(
+          title: '取消',
+          action: () => Navigator.of(dialogContext).pop(),
+        ),
+        rightBtn: TDDialogButtonOptions(
+          title: '保存',
+          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+        ),
       ),
     );
     if (value == null) return;
@@ -943,40 +942,34 @@ class _ThemeSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Row(
-        children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(TdRadius.medium),
-            child: SizedBox(
-              width: 46,
-              height: 46,
-              child: Row(
-                children: <Widget>[
-                  for (final color in style.preview)
-                    Expanded(child: ColoredBox(color: color)),
-                ],
-              ),
-            ),
+    // 官方 TDCell：色板预览走 leftIconWidget，箭头用组件自带的 arrow
+    return TDCell(
+      title: style.label,
+      description: followSystem ? '跟随系统深色模式' : '固定主题，不跟随系统',
+      leftIconWidget: ClipRRect(
+        borderRadius: BorderRadius.circular(TdRadius.medium),
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Row(
+            children: <Widget>[
+              for (final color in style.preview)
+                Expanded(child: ColoredBox(color: color)),
+            ],
           ),
-          const SizedBox(width: TdSpacer.small),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(style.label, style: TdText.bodyLarge),
-                const SizedBox(height: 2),
-                Text(
-                  followSystem ? '跟随系统深色模式' : '固定主题，不跟随系统',
-                  style: TdText.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right, size: 22, color: TdPalette.gray6),
-        ],
+        ),
       ),
+      arrow: true,
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
+        padding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyLarge,
+        descriptionStyle: TdText.bodySmall,
+      ),
+      onClick: (cell) => onTap(),
     );
   }
 }

@@ -67,7 +67,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       showDivider: true,
       backgroundColor: TdPalette.pageBackground,
       child: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: TDLoading(
+                  size: TDLoadingSize.medium, icon: TDLoadingIcon.circle))
           : Column(
               children: <Widget>[
                 Expanded(
@@ -236,28 +238,23 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     final controller = TextEditingController();
     final input = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('添加订阅', style: TdText.titleSmall),
-        content: TextField(
+      builder: (dialogContext) => TDAlertDialog(
+        title: '添加订阅',
+        contentWidget: TDTextarea(
           controller: controller,
           maxLines: 3,
           minLines: 1,
-          decoration: const InputDecoration(
-            hintText: '粘贴 UP 主空间 / 合集 / 收藏夹 / 番剧 ss 链接',
-          ),
+          hintText: '粘贴 UP 主空间 / 合集 / 收藏夹 / 番剧 ss 链接',
+          backgroundColor: TdPalette.gray1,
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('添加'),
-          ),
-        ],
+        leftBtn: TDDialogButtonOptions(
+          title: '取消',
+          action: () => Navigator.of(dialogContext).pop(),
+        ),
+        rightBtn: TDDialogButtonOptions(
+          title: '添加',
+          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+        ),
       ),
     );
     if (input == null || input.isEmpty || !mounted) return;
@@ -349,23 +346,19 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   Future<void> _confirmDelete(Subscription subscription) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('删除订阅', style: TdText.titleSmall),
-        content: Text(
-          '将同时清除「${subscription.title.isEmpty ? subscription.sourceId : subscription.title}」'
-          '已发现的内容记录。已下载的文件不受影响。',
+      builder: (dialogContext) => TDAlertDialog(
+        title: '删除订阅',
+        content:
+            '将同时清除「${subscription.title.isEmpty ? subscription.sourceId : subscription.title}」'
+            '已发现的内容记录。已下载的文件不受影响。',
+        leftBtn: TDDialogButtonOptions(
+          title: '取消',
+          action: () => Navigator.of(dialogContext).pop(false),
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
+        rightBtn: TDDialogButtonOptions(
+          title: '删除',
+          action: () => Navigator.of(dialogContext).pop(true),
+        ),
       ),
     );
     if (confirmed != true) return;
@@ -429,7 +422,9 @@ class _SubscriptionItemsPageState extends State<SubscriptionItemsPage> {
       showDivider: true,
       backgroundColor: TdPalette.pageBackground,
       child: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: TDLoading(
+                  size: TDLoadingSize.medium, icon: TDLoadingIcon.circle))
           : _items.isEmpty
               ? const TdEmptyView(text: '没有未处理的新内容')
               : Column(

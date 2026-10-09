@@ -158,38 +158,27 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
 
   Widget _buildGroup(CacheGroup group) {
     final checked = _selected.contains(group.key);
-    return InkWell(
-      onTap: () => _toggle(group),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            TdCheckboxField(
-              checked: checked,
-              onChanged: (_) => _toggle(group),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                          child: Text(group.label, style: TdText.bodyMedium)),
-                      Text(
-                        '${group.fileCount} 个 · ${formatBytes(group.bytes)}',
-                        style: TdText.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  Text(group.description, style: TdText.bodySmall),
-                ],
-              ),
-            ),
-          ],
-        ),
+    // 官方 TDCell：右侧占用统计用 note 槽位，勾选框用 leftIconWidget 槽位
+    return TDCell(
+      title: group.label,
+      description: group.description,
+      note: '${group.fileCount} 个 · ${formatBytes(group.bytes)}',
+      noteMaxLine: 1,
+      leftIconWidget: TdCheckboxField(
+        checked: checked,
+        onChanged: (_) => _toggle(group),
       ),
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyMedium,
+        descriptionStyle: TdText.bodySmall,
+        noteStyle: TdText.bodyMedium,
+      ),
+      onClick: (cell) => _toggle(group),
     );
   }
 
