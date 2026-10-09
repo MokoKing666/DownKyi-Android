@@ -16,6 +16,7 @@ import '../bili/subtitles.dart';
 import 'download_archive.dart';
 import 'ffmpeg_ops.dart';
 import 'ffmpeg_service.dart';
+import 'safe_replace.dart';
 import 'start_throttle.dart';
 import '../data/settings_store.dart';
 import '../data/task_dao.dart';
@@ -96,6 +97,55 @@ class DownloadManager extends ChangeNotifier {
 
   bool get usesAria2 => settings.downloadEngine == DownloadEngine.aria2;
 
+  // ------------------------------------------------------------------
+  // 任务参数快照读取
+  //
+  // 规则：v2.2 起的任务带快照（见 DownloadTask 的快照字段），一律读快照；
+  // 旧任务快照为空，回退到全局设置——与旧行为完全一致，不打扰存量任务。
+  // ------------------------------------------------------------------
+
+  bool _taskUsesAria2(DownloadTask task) => task.engine.isEmpty
+      ? usesAria2
+      : task.engine == DownloadEngine.aria2.name;
+
+  String _taskAria2Dir(DownloadTask task) =>
+      task.aria2Dir.isEmpty ? settings.aria2Dir : task.aria2Dir;
+
+  bool _taskMergeAv(DownloadTask task) => task.mergeAv ?? settings.mergeAv;
+
+  bool _taskSaveToGallery(DownloadTask task) =>
+      task.saveToGallery ?? settings.saveToGallery;
+
+  bool _taskEmbedMetadata(DownloadTask task) =>
+      task.embedMetadata ?? settings.embedMetadata;
+
+  bool _taskUseFfmpegForMux(DownloadTask task) => task.muxEngine.isEmpty
+      ? settings.useFfmpegForMux
+      : task.muxEngine == MuxEngine.ffmpeg.name;
+
+  List<String> _taskSubtitleLanguages(DownloadTask task) =>
+      task.snapshotSubtitleLanguages.isEmpty
+          ? settings.subtitleLanguages
+          : task.snapshotSubtitleLanguages;
+
+  AiSubtitleStrategy _taskAiStrategy(DownloadTask task) =>
+      task.aiSubtitleStrategy.isEmpty
+          ? settings.aiSubtitleStrategy
+          : AiSubtitleStrategy.fromName(task.aiSubtitleStrategy);
+
+  DanmakuStyle _taskDanmakuStyle(DownloadTask task) {
+    if (task.danmakuStyleJson.isEmpty) return settings.danmakuStyle;
+    try {
+      final decoded = jsonDecode(task.danmakuStyleJson);
+      if (decoded is Map) {
+        return DanmakuStyle.fromJson(decoded.cast<String, Object?>());
+      }
+    } catch (_) {
+      // 快照损坏按全局设置处理
+    }
+    return settings.danmakuStyle;
+  }
+
   /// aria2 是否跑在本机。只有本机运行的 aria2 才可能把文件交回 App 做后续处理。
   bool get aria2RunsLocally {
     final host =
@@ -108,16 +158,12 @@ class DownloadManager extends ChangeNotifier {
 
   Future<void> init() async {
     final loaded = await _dao.loadAll();
-    for (final task in loaded) {
-      // 上次退出时还在跑的任务，恢复为暂停
-      if (task.status == TaskStatus.running ||
-          task.status == TaskStatus.merging) {
-        task.status = TaskStatus.paused;
-        task.speed = 0;
-        await _dao.update(task);
-      }
-      tasks.add(task);
-    }
+    tasks.addAll(loaded);
+    // 注意：这里**不再**把 running/merging 一律降级成 paused。
+    // 旧逻辑有两个问题：① 它抢在 DownloadSession.recoverInterrupted 之前
+    // 改状态，导致恢复逻辑拿不到任何任务（死代码）；② aria2 任务在远端
+    // 可能跑得好好的，本地标 paused 纯属失真。
+    // 恢复统一由 DownloadSession.recoverInterrupted 按引擎区分处理。
     _completedCount =
         tasks.where((task) => task.status == TaskStatus.completed).length;
     notifyListeners();
@@ -203,8 +249,21 @@ class DownloadManager extends ChangeNotifier {
       flags: effectiveFlags,
       danmakuFormat: effectiveDanmaku,
       createdAt: DateTime.now().millisecondsSinceEpoch,
+      // -------- 参数快照 --------
+      // 入队这一刻把「会影响产物内容或落盘位置」的设置固化到任务上：
+      // 之后用户改全局设置（字幕语言、弹幕样式、合并引擎、保存位置、
+      // 下载引擎……）只影响**新**任务，已在队列里的任务按入队时的配置跑。
+      subtitleLanguages: settings.subtitleLanguages.join('+'),
+      aiSubtitleStrategy: settings.aiSubtitleStrategy.name,
+      danmakuStyleJson: jsonEncode(settings.danmakuStyle.toJson()),
+      muxEngine: settings.muxEngine.name,
+      embedMetadata: settings.embedMetadata,
+      mergeAv: settings.mergeAv,
+      saveToGallery: settings.saveToGallery,
+      engine: settings.downloadEngine.name,
+      aria2Dir: settings.aria2Dir,
     );
-    task.fileName = buildFileName(task);
+    task.fileName = await buildFileName(task);
     await _dao.insert(task);
     tasks.add(task);
     notifyListeners();
@@ -246,7 +305,7 @@ class DownloadManager extends ChangeNotifier {
     return sha256.convert(utf8.encode(identity)).toString().substring(0, 32);
   }
 
-  String buildFileName(DownloadTask task) {
+  Future<String> buildFileName(DownloadTask task) async {
     var name = settings.fileNameTemplate
         .replaceAll('{title}', task.title)
         .replaceAll('{quality}',
@@ -263,13 +322,45 @@ class DownloadManager extends ChangeNotifier {
   /// 文件名查重。
   ///
   /// 批量下载时标题极易重复（同系列、同名分 P），默认模板又只有 `{title}`，
-  /// 两三个任务会写进同一个文件互相覆盖。这里在已有任务里查重并追加 `(1)`、`(2)`。
-  String _dedupeFileName(String base) {
+  /// 两三个任务会写进同一个文件互相覆盖。
+  ///
+  /// 除了任务列表，还要查**目标目录里的真实文件**：「清空下载记录但保留
+  /// 媒体文件」之后再下载，同名文件过去会被静默覆盖（renameTo 替换、
+  /// MediaMuxer 截断重建）。查磁盘后这种情况会自动编号。
+  Future<String> _dedupeFileName(String base) async {
     final taken = <String>{
       for (final task in tasks)
         if (task.fileName.isNotEmpty) task.fileName,
     };
+    taken.addAll(await _diskFileNames());
     return dedupeFileName(base, taken);
+  }
+
+  /// 测试钩子：替换下载目录文件列表的来源（平台相关逻辑没法在单测里跑）。
+  static Future<Set<String>> Function()? diskFileNamesForTest;
+
+  /// 下载目录里的真实文件名（去掉扩展名，查重按 basename 比较）。
+  ///
+  /// 只覆盖本机目录（应用目录 / 自定义目录）。系统相册由 MediaStore 管理，
+  /// Android 10+ 会自动给重名文件改名，App 不读回确认——
+  /// 这个边界在 README 里写明。
+  Future<Set<String>> _diskFileNames() async {
+    final provider = diskFileNamesForTest;
+    if (provider != null) return provider();
+    try {
+      final dir = await ensureDownloadDir();
+      final names = <String>{};
+      await for (final entity in Directory(dir).list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = entity.path.split(Platform.pathSeparator).last;
+        final dot = name.lastIndexOf('.');
+        names.add(dot > 0 ? name.substring(0, dot) : name);
+      }
+      return names;
+    } catch (error) {
+      AppLog.e('Task', '读取下载目录失败（跳过重名检查）', error);
+      return const <String>{};
+    }
   }
 
   static String _formatDate(int milliseconds) {
@@ -328,6 +419,11 @@ class DownloadManager extends ChangeNotifier {
     final task = _firstWhereOrNull(id);
     if (task == null) return;
     if (task.status == TaskStatus.completed) return;
+    // aria2 任务且有 gid 记录：先问远端，别盲目重新下发
+    if (_taskUsesAria2(task) && task.aria2Gids.isNotEmpty) {
+      unawaited(_resumeAria2(task));
+      return;
+    }
     task.status = TaskStatus.queued;
     task.error = null;
     unawaited(_dao.update(task));
@@ -359,10 +455,14 @@ class DownloadManager extends ChangeNotifier {
     if (task == null) return;
     final job = _jobs[id];
     job?.token.cancel();
-    if (job != null) {
-      for (final gid in job.aria2Gids.values) {
-        unawaited(aria2.remove(gid));
-      }
+    // 远端清理：内存里的 gid + 持久化的 gid 都删，
+    // 覆盖「job 已不在但任务还带着 gid」的情况
+    final remoteGids = <String>{
+      ...?job?.aria2Gids.values,
+      ...task.aria2Gids.values,
+    };
+    for (final gid in remoteGids) {
+      unawaited(aria2.remove(gid));
     }
     _jobs.remove(id);
     if (deleteFiles) {
@@ -385,6 +485,16 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 重新入队（供启动恢复使用）：只改状态与持久化，不清任何下载进度。
+  /// 与 [retry] 的区别：retry 是「从头再来」，requeue 是「断点续传」。
+  Future<void> requeue(DownloadTask task) async {
+    task.status = TaskStatus.queued;
+    task.error = null;
+    await _dao.update(task);
+    notifyListeners();
+    _pump();
+  }
+
   Future<void> retry(int id) {
     final task = _firstWhereOrNull(id);
     if (task == null) return Future<void>.value();
@@ -395,6 +505,7 @@ class DownloadManager extends ChangeNotifier {
     task.videoSegments = '';
     task.audioSegments = '';
     task.aria2Gid = null;
+    task.aria2Gids = const <String, String>{};
     task.exported = false;
     task.exportedPath = null;
     return _dao.update(task).then((_) {
@@ -472,7 +583,7 @@ class DownloadManager extends ChangeNotifier {
         return;
       }
 
-      if (usesAria2) {
+      if (_taskUsesAria2(task)) {
         await _executeAria2(task, job);
         return;
       }
@@ -561,8 +672,8 @@ class DownloadManager extends ChangeNotifier {
       task.merged = false;
       task.outputPath = null;
       AppLog.d('Task', '没有媒体流，跳过合并：${task.title}');
-    } else if (!settings.mergeAv) {
-      // 设置里关掉了「自动合并音视频」：只保留分片，之后可在工具箱手动合并
+    } else if (!_taskMergeAv(task)) {
+      // 入队时关掉了「自动合并音视频」：只保留分片，之后可在工具箱手动合并
       task.merged = false;
       task.outputPath = task.videoPath ?? task.audioPath;
       AppLog.d('Task', '已按设置跳过自动合并：${task.title}');
@@ -579,23 +690,47 @@ class DownloadManager extends ChangeNotifier {
     task.downloadedBytes = task.totalBytes;
     _completedCount++;
     _lastCompletedTitle = task.title;
-    // 写进下载归档：下次再遇到同一个媒体（同 BV/分P/清晰度/编码/音轨）
-    // 直接跳过。只在真的下了媒体流时记录——纯封面/弹幕任务不构成
-    // 「这个视频我已经有了」。
-    if (task.wantVideo || task.wantAudio) {
-      unawaited(DownloadArchive.instance.add(
-        DownloadArchive.mediaKey(
-          bvid: task.bvid,
-          cid: task.cid,
-          epId: task.epId,
-          quality: task.quality,
-          codec: task.codec,
-          audioId: task.audioId,
-        ),
-      ));
-    }
     await _dao.update(task);
+    // 归档在 DB 落盘之后写：崩溃窗口里宁可「任务完成但归档缺失」
+    // （下次同媒体会多下一次），也不要「文件没下成却再也不能下」。
+    await _recordArchive(task);
     notifyListeners();
+  }
+
+  /// 登记下载归档。**只有真正成功的任务才允许登记**：
+  ///
+  /// - 合并失败（merged=false 且 error 非空）不登记——文件实际不存在，
+  ///   登记了会把同一媒体的重下通道永久堵死；
+  /// - 入队时选择「不合并」且没有错误的，视为用户主动选择的产物，登记；
+  /// - 纯附加资源任务（只下封面/弹幕/字幕）不构成「这个视频我已经有了」；
+  /// - aria2 任务：能走到收尾说明远端下载完成（失败路径会抛异常走 failed）。
+  ///
+  /// 崩溃一致性：归档写入与任务状态之间没有事务，因此刻意安排为
+  /// 「先 DB 后归档」——归档缺失的代价是重复下载一次，可接受；
+  /// 反过来的代价是用户无法重新下载，不可接受。
+  Future<void> _recordArchive(DownloadTask task) async {
+    final hasError = task.error != null && task.error!.isNotEmpty;
+    final succeeded = isTaskSuccessForArchive(
+      hasMedia: task.wantVideo || task.wantAudio,
+      usesAria2: _taskUsesAria2(task),
+      merged: task.merged,
+      mergeAvEffective: _taskMergeAv(task),
+      hasError: hasError,
+    );
+    if (!succeeded) {
+      AppLog.d('Task', '任务未成功，不登记归档：${task.title}');
+      return;
+    }
+    await DownloadArchive.instance.add(
+      DownloadArchive.mediaKey(
+        bvid: task.bvid,
+        cid: task.cid,
+        epId: task.epId,
+        quality: task.quality,
+        codec: task.codec,
+        audioId: task.audioId,
+      ),
+    );
   }
 
   // ------------------------------------------------------------------
@@ -647,7 +782,7 @@ class DownloadManager extends ChangeNotifier {
       final gid = await client.addUri(
         url: entry.value,
         options: Aria2Client.optionsFor(
-          dir: settings.aria2Dir,
+          dir: _taskAria2Dir(task),
           out: _aria2FileName(task, entry.key),
           referer: BiliConst.webBase,
           userAgent: BiliConst.userAgent,
@@ -657,14 +792,28 @@ class DownloadManager extends ChangeNotifier {
       );
       gids[entry.key] = gid;
       job.aria2Gids[entry.key] = gid;
-      task.aria2Gid = gid;
       AppLog.d('Aria2', '已下发 ${entry.key} -> $gid');
     }
+    // 全部 gid 持久化（之前只留最后一个流的，重启后无法区分 video/audio 的远端状态）
+    task.aria2Gids = gids;
+    task.aria2Gid = gids.isEmpty ? null : gids.values.first;
     await _dao.update(task);
     _touch();
 
     await _pollAria2(job, gids);
     if (job.token.isCancelled) return;
+
+    await _finishAria2Task(task);
+  }
+
+  /// aria2 任务收尾（从 _executeAria2 抽出，启动恢复接管「已全部完成」的任务时也走这里）。
+  Future<void> _finishAria2Task(DownloadTask task) async {
+    // 附加资源（封面 / 弹幕 / 字幕）与内置引擎统一处理：
+    // 它们都在 App 侧下载，与远端落盘位置无关。之前 aria2 路径完全跳过这一步，
+    // 导致同一视频换引擎下载时附加资源行为不一致。
+    final extrasDir = await ensureDownloadDir();
+    final failedExtras = await _downloadExtras(task, extrasDir);
+    task.extrasError = failedExtras.isEmpty ? null : failedExtras.join('、');
 
     // 文件在 aria2 所在设备，App 侧无法合并 / 导出相册
     task.status = TaskStatus.completed;
@@ -676,12 +825,15 @@ class DownloadManager extends ChangeNotifier {
     task.finishedAt = DateTime.now().millisecondsSinceEpoch;
     if (task.totalBytes <= 0) task.totalBytes = task.downloadedBytes;
     task.downloadedBytes = task.totalBytes;
-    task.error = settings.aria2Dir.isEmpty
+    final aria2Dir = _taskAria2Dir(task);
+    task.error = aria2Dir.isEmpty
         ? '已由 Aria2 下载完成（落盘于 aria2 所在设备）'
-        : '已由 Aria2 下载完成，位置：${settings.aria2Dir}';
+        : '已由 Aria2 下载完成，位置：$aria2Dir';
     _completedCount++;
     _lastCompletedTitle = task.title;
     await _dao.update(task);
+    // aria2 路径之前从不写归档：同一媒体换引擎重下时，归档与任务列表互相矛盾
+    await _recordArchive(task);
     notifyListeners();
   }
 
@@ -716,6 +868,176 @@ class DownloadManager extends ChangeNotifier {
       _persistProgress(job);
       notifyListeners();
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Aria2 任务恢复
+  //
+  // 原则：**用持久化的 gid 询问远端真实状态，绝不盲目重新 addUri**。
+  // 盲目重下是旧行为（重启后 task.aria2Gid 被清空、重新入队、重新下发），
+  // 对已经在远端跑了一半的任务是纯浪费，还会产生孤儿下载。
+  // ------------------------------------------------------------------
+
+  /// 启动时恢复 aria2 任务，返回接管的个数。由 DownloadSession 统一调用。
+  Future<int> recoverAria2Tasks() async {
+    var recovered = 0;
+    for (final task in tasks) {
+      if (!_taskUsesAria2(task)) continue;
+      if (task.aria2Gids.isEmpty) continue;
+      if (task.status != TaskStatus.running &&
+          task.status != TaskStatus.merging &&
+          task.status != TaskStatus.paused) {
+        continue;
+      }
+      try {
+        await _recoverAria2Task(task, task.aria2Gids);
+        recovered++;
+      } catch (error) {
+        AppLog.e('Aria2', '恢复任务 ${task.id} 失败', error);
+      }
+    }
+    if (recovered > 0) AppLog.d('Aria2', '已恢复 $recovered 个 aria2 任务');
+    return recovered;
+  }
+
+  Future<void> _recoverAria2Task(
+      DownloadTask task, Map<String, String> gids) async {
+    final client = aria2;
+    final states = <String, Aria2Status>{};
+    try {
+      for (final entry in gids.entries) {
+        states[entry.key] = await client.tellStatus(entry.value);
+      }
+    } catch (error) {
+      // RPC 不可达：**不覆盖任何状态**。gid 与已下载进度全部保留，
+      // 用户恢复网络后点「继续」即可重新接管。
+      task.status = TaskStatus.paused;
+      task.speed = 0;
+      task.error = '无法连接 Aria2，恢复连接后点「继续」自动接管';
+      await _dao.update(task);
+      notifyListeners();
+      return;
+    }
+
+    var failed = 0;
+    var paused = 0;
+    String? failedReason;
+    final pending = <String, String>{};
+    for (final entry in states.entries) {
+      final status = entry.value;
+      if (status.isComplete) {
+        continue;
+      } else if (status.isError) {
+        failed++;
+        failedReason ??= '${entry.key}: ${status.errorMessage}';
+      } else {
+        if (status.isPaused) paused++;
+        pending[entry.key] = gids[entry.key]!;
+      }
+    }
+
+    if (failed > 0) {
+      // 远端任务已失效（error / removed）：不自动重下，让用户决定。
+      // gid 保留在任务上供排查，「重试」会走完整重新下发。
+      task.status = TaskStatus.failed;
+      task.speed = 0;
+      task.error = 'Aria2 任务已失效（$failedReason）';
+      await _dao.update(task);
+      notifyListeners();
+      return;
+    }
+    if (pending.isEmpty) {
+      // 全部流都已完成：直接走正常收尾（附加资源 + 归档）
+      await _finishAria2Task(task);
+      return;
+    }
+    if (pending.length == paused) {
+      // 远端整体处于暂停：本地同步为 paused（与远端一致，不算接管）
+      task.status = TaskStatus.paused;
+      task.speed = 0;
+      await _dao.update(task);
+      notifyListeners();
+      return;
+    }
+    // 有 active / waiting：重建 job 接管轮询
+    _takeOverAria2Polling(task, pending);
+  }
+
+  /// 重建 job 接管远端仍在跑的任务（不重新 addUri）
+  void _takeOverAria2Polling(DownloadTask task, Map<String, String> pending) {
+    if (_jobs.containsKey(task.id)) return;
+    final job = _Job(task, CancelToken());
+    job.aria2Gids.addAll(task.aria2Gids);
+    _jobs[task.id] = job;
+    task.status = TaskStatus.running;
+    task.error = null;
+    unawaited(_dao.update(task));
+    notifyListeners();
+    unawaited(_resumePolling(job, pending));
+  }
+
+  Future<void> _resumePolling(_Job job, Map<String, String> pending) async {
+    try {
+      await _pollAria2(job, pending);
+      if (job.token.isCancelled) return;
+      await _finishAria2Task(job.task);
+    } catch (error) {
+      if (job.token.isCancelled) return;
+      final task = job.task;
+      task.status = TaskStatus.failed;
+      task.speed = 0;
+      task.error = error is ApiException ? error.message : error.toString();
+      await _dao.update(task);
+      notifyListeners();
+    } finally {
+      _jobs.remove(job.task.id);
+      await _stopServiceIfIdle();
+      _pump();
+    }
+  }
+
+  /// aria2 任务的「继续」：先问远端真实状态再决定动作。
+  ///
+  /// - 远端 paused → unpause，然后接管轮询
+  /// - 远端还在跑 → 直接接管轮询
+  /// - 远端已完成 → 直接收尾
+  /// - 远端已失效（removed）→ 重新入队（会重新解析地址并 addUri）
+  /// - RPC 不可达 → 只提示，不改状态
+  Future<void> _resumeAria2(DownloadTask task) async {
+    final client = aria2;
+    final gids = task.aria2Gids;
+    final pending = <String, String>{};
+    try {
+      for (final entry in gids.entries) {
+        final status = await client.tellStatus(entry.value);
+        if (status.isComplete) continue;
+        if (status.isError) {
+          // 远端已失效：清掉 gid 重新走完整下发流程
+          AppLog.d('Aria2', '远端任务已失效（${entry.key}），重新下发');
+          task.aria2Gids = const <String, String>{};
+          task.aria2Gid = null;
+          task.status = TaskStatus.queued;
+          task.error = null;
+          await _dao.update(task);
+          notifyListeners();
+          _pump();
+          return;
+        }
+        if (status.isPaused) unawaited(client.unpause(entry.value));
+        pending[entry.key] = entry.value;
+      }
+    } catch (error) {
+      task.error = '无法连接 Aria2：$error';
+      await _dao.update(task);
+      notifyListeners();
+      return;
+    }
+
+    if (pending.isEmpty) {
+      await _finishAria2Task(task);
+      return;
+    }
+    _takeOverAria2Polling(task, pending);
   }
 
   // ------------------------------------------------------------------
@@ -834,7 +1156,7 @@ class DownloadManager extends ChangeNotifier {
   /// 任务仍然显示「已完成」，用户以为一切正常。
   Future<List<String>> _downloadExtras(DownloadTask task, String dir) async {
     final base = '$dir/${task.fileName}';
-    final toGallery = settings.saveToGallery;
+    final toGallery = _taskSaveToGallery(task);
     final failed = <String>[];
 
     if (task.wantCover && task.cover.isNotEmpty) {
@@ -860,7 +1182,7 @@ class DownloadManager extends ChangeNotifier {
         final content = switch (task.danmakuFormat) {
           DanmakuFormat.xml => DanmakuWriter.toXml(items),
           DanmakuFormat.ass => DanmakuWriter.toAss(items,
-              title: task.title, style: settings.danmakuStyle),
+              title: task.title, style: _taskDanmakuStyle(task)),
           DanmakuFormat.txt => DanmakuWriter.toText(items),
           DanmakuFormat.none => '',
         };
@@ -887,12 +1209,15 @@ class DownloadManager extends ChangeNotifier {
         // 之前只挑「含 zh 的第一条」并固定写成 video.srt，想要中英双字是做不到的。
         final chosen = SubtitleLanguage.select(
           subtitles,
-          settings.subtitleLanguages,
-          aiStrategy: settings.aiSubtitleStrategy,
+          _taskSubtitleLanguages(task),
+          aiStrategy: _taskAiStrategy(task),
         );
         if (chosen.isEmpty && subtitles.isNotEmpty) {
           // 有字幕但没有用户要的语言，明确报出来而不是静默成功
-          failed.add('字幕（没有 ${settings.subtitleSummary}）');
+          final wanted = _taskSubtitleLanguages(task)
+              .map(SubtitleLanguage.labelOf)
+              .join(' / ');
+          failed.add('字幕（没有 $wanted）');
         }
         for (final item in chosen) {
           final code = SubtitleLanguage.normalize(item.lan);
@@ -1006,8 +1331,9 @@ class DownloadManager extends ChangeNotifier {
         await _deleteFile(temp);
         return;
       }
-      await _deleteFile(output);
-      await tempFile.rename(output);
+      // 安全替换：先备份原文件再改名到位，失败自动回滚。
+      // 旧顺序「先删原文件再 rename」在 rename 抛异常时成品直接丢失。
+      await SafeReplace.replace(temp, output);
       AppLog.d('Task', '已写入元数据${coverPath != null ? '与封面' : ''}：${task.title}');
     } catch (error) {
       AppLog.e('Task', '元数据注入异常（保留原文件）', error);
@@ -1078,7 +1404,7 @@ class DownloadManager extends ChangeNotifier {
       // 杜比视界这类带额外元数据的片源尤其依赖它。
       // FFmpeg 只在用户显式切换时才用——它的 -map/-strict 组合在部分机型上
       // 会产出播不了的成品，绝不能做默认。切了 FFmpeg 但失败时仍回退 MediaMuxer。
-      ok = settings.useFfmpegForMux
+      ok = _taskUseFfmpegForMux(task)
           ? (await _remuxWithFfmpeg(videoPath, audioPath, output) ||
               await NativeBridge.mux(
                   video: videoPath, audio: audioPath, output: output))
@@ -1102,7 +1428,7 @@ class DownloadManager extends ChangeNotifier {
       // 可选：把标题 / UP 主 / 封面写进成品（FFmpeg，设置里默认关）。
       // 任何一步失败都只记日志、保留原成品——元数据是锦上添花，
       // 绝不能反过来弄坏文件。
-      if (settings.embedMetadata) {
+      if (_taskEmbedMetadata(task)) {
         await _injectMetadata(task, output, extension,
             hasVideo: videoPath != null);
       }
@@ -1114,7 +1440,7 @@ class DownloadManager extends ChangeNotifier {
       final placed = await _placeFile(
         localPath: output,
         fileName: '${task.fileName}.$extension',
-        toGallery: settings.saveToGallery,
+        toGallery: _taskSaveToGallery(task),
         // 只有视频进 Movies；单独下的音轨进 Download，免得混进相册
         category: videoPath != null ? 'video' : 'file',
       );

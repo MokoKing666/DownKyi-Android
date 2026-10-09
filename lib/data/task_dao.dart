@@ -17,7 +17,7 @@ class TaskDao {
     final path = '${await getDatabasesPath()}/downkyi.db';
     final database = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE download_task(
@@ -54,7 +54,17 @@ class TaskDao {
             aria2_gid TEXT,
             exported INTEGER,
             exported_path TEXT,
-            extras_error TEXT
+            extras_error TEXT,
+            subtitle_languages TEXT,
+            ai_subtitle_strategy TEXT,
+            danmaku_style_json TEXT,
+            mux_engine TEXT,
+            embed_metadata INTEGER,
+            merge_av INTEGER,
+            save_to_gallery INTEGER,
+            engine TEXT,
+            aria2_dir TEXT,
+            aria2_gids TEXT
           )
         ''');
         await db.execute(
@@ -75,6 +85,25 @@ class TaskDao {
         if (oldVersion < 3) {
           await db.execute(
               'ALTER TABLE download_task ADD COLUMN extras_error TEXT');
+        }
+        // v4：任务参数快照 + aria2 多 gid。
+        // 旧任务这些列为 NULL / 空串，执行时回退到全局设置，与旧行为一致。
+        if (oldVersion < 4) {
+          const newColumns = <String>[
+            'subtitle_languages TEXT',
+            'ai_subtitle_strategy TEXT',
+            'danmaku_style_json TEXT',
+            'mux_engine TEXT',
+            'embed_metadata INTEGER',
+            'merge_av INTEGER',
+            'save_to_gallery INTEGER',
+            'engine TEXT',
+            'aria2_dir TEXT',
+            'aria2_gids TEXT',
+          ];
+          for (final column in newColumns) {
+            await db.execute('ALTER TABLE download_task ADD COLUMN $column');
+          }
         }
       },
     );

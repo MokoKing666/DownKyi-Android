@@ -123,9 +123,19 @@ class DownloadSession {
   /// 自动暂停的原因，供 UI 直接展示
   String? get pausedReason => _pausedReason;
 
-  /// 把数据库里「看起来在下载、实际没在下载」的任务重新入队。
+  /// 把数据库里「看起来在下载、实际没在下载」的任务恢复起来。
   ///
-  /// 返回恢复的任务数。必须在任何下载开始之前调用。
+  /// 按引擎区分处理：
+  ///
+  /// - **内置引擎**：重新入队，**保留分片**（断点续传）。
+  ///   旧实现调 `retry()` 会把分片状态清空从头重下——那是对「恢复」的误解，
+  ///   大文件被系统回收一次就前功尽弃。
+  /// - **Aria2 引擎**：远端任务可能跑得好好的，本地重启与它无关。
+  ///   用持久化的 gid 询问远端真实状态后再决定接管 / 收尾 / 标失败，
+  ///   见 DownloadManager.recoverAria2Tasks。
+  ///
+  /// 返回恢复的内置任务数（aria2 的接管数由 manager 自己记日志）。
+  /// 必须在任何下载开始之前调用。
   Future<int> recoverInterrupted(DownloadManager manager) async {
     var recovered = 0;
     for (final task in manager.tasks) {
@@ -133,15 +143,24 @@ class DownloadSession {
           task.status != TaskStatus.merging) {
         continue;
       }
+      if (task.engine.isNotEmpty && task.engine != 'builtin') continue;
       try {
-        await manager.retry(task.id);
+        // 续传语义：不清分片、不清进度，重新入队即可——
+        // SegmentDownloader 会按分片签名从断点继续。
+        task.status = TaskStatus.queued;
+        task.speed = 0;
+        await manager.requeue(task);
         recovered++;
       } catch (error) {
         AppLog.e('Session', '恢复任务 ${task.id} 失败', error);
       }
     }
+
+    // aria2 任务单独走「问远端」的恢复路径
+    await manager.recoverAria2Tasks();
+
     if (recovered > 0) {
-      AppLog.d('Session', '已重新入队 $recovered 个被中断的任务');
+      AppLog.d('Session', '已恢复 $recovered 个被中断的内置任务（断点续传）');
     }
     return recovered;
   }

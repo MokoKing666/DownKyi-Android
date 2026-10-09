@@ -7,6 +7,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 import '../../bili/subtitles.dart';
 import '../../core/constants.dart';
 import '../../core/logger.dart';
+import '../../core/secret_store.dart';
 import '../../data/http_client.dart';
 import '../../data/settings_store.dart';
 import '../../download/download_archive.dart';
@@ -33,6 +34,34 @@ class SettingsPage extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.only(bottom: TdSpacer.large),
         children: <Widget>[
+          // ---------------- 凭据降级警告 ----------------
+          // 加密存储不可用时，凭据会以明文落在 SharedPreferences。
+          // 旧实现是静默降级——用户不知道自己的 SESSDATA 正以明文存储。
+          // 审查明确要求「不得在未告知用户的情况下降级」，所以置顶显示。
+          if (!SecretStore.available) ...<Widget>[
+            Container(
+              padding: const EdgeInsets.all(TdSpacer.medium),
+              decoration: BoxDecoration(
+                color: TdPalette.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(TdRadius.large),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('加密存储不可用', style: TdText.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    '系统密钥库初始化失败，Cookie 与 aria2 密钥正以明文存储。'
+                    '请勿在不可信的设备上使用，也不要把运行日志贴给陌生人。',
+                    style: TdText.bodySmall
+                        .copyWith(color: TdPalette.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: TdSpacer.small),
+          ],
+
           // ---------------- 主题外观 ----------------
           TdSection(
             title: '主题外观',

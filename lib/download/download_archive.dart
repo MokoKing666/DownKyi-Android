@@ -65,3 +65,26 @@ class DownloadArchive {
     return list.sublist(list.length - cap);
   }
 }
+
+/// 任务是否「真正成功」，从而允许登记归档。
+///
+/// 背景：v2.1.0 的归档是在 `_finishTask` 里无条件写入的，于是**合并失败**的任务
+/// 也进了归档——文件实际不存在，同一媒体却被归档永久挡住，用户无法重下。
+///
+/// 规则（全部做成入参，保持纯函数可测）：
+/// - [hasMedia] 为 false（纯封面/弹幕/字幕任务）：不构成「这个视频我已经有了」
+/// - [usesAria2]：能走到收尾说明远端下载完成（失败路径会抛异常走 failed）
+/// - [merged]：合并成功
+/// - 入队时选择「不合并」且没有错误：用户主动选择的产物，也算成功
+bool isTaskSuccessForArchive({
+  required bool hasMedia,
+  required bool usesAria2,
+  required bool merged,
+  required bool mergeAvEffective,
+  required bool hasError,
+}) {
+  if (!hasMedia) return false;
+  if (usesAria2) return true;
+  if (merged) return true;
+  return !mergeAvEffective && !hasError;
+}
