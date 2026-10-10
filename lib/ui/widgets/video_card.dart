@@ -93,47 +93,32 @@ class VideoInfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (leading != null) ...<Widget>[
-              leading!,
-              const SizedBox(width: TdSpacer.small),
-            ],
-            VideoCover(url: cover, durationMs: durationMs),
+    // 官方 TDCell：封面（含左侧勾选框）走 leftIconWidget，尾部控件走 rightIconWidget，
+    // 内边距与底色保持原值，版式不变
+    return TDCell(
+      title: title,
+      description: subtitle,
+      leftIconWidget: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (leading != null) ...<Widget>[
+            leading!,
             const SizedBox(width: TdSpacer.small),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    title,
-                    style: TdText.bodyMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  if (subtitle != null && subtitle!.isNotEmpty)
-                    Text(
-                      subtitle!,
-                      style: TdText.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
-            ),
-            if (trailing != null) ...<Widget>[
-              const SizedBox(width: TdSpacer.xs),
-              trailing!,
-            ],
           ],
-        ),
+          VideoCover(url: cover, durationMs: durationMs),
+        ],
       ),
+      rightIconWidget: trailing,
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyMedium,
+        descriptionStyle: TdText.bodySmall,
+      ),
+      onClick: onTap == null ? null : (cell) => onTap!(),
     );
   }
 }

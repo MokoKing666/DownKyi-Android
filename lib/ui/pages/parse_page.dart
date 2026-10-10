@@ -290,30 +290,28 @@ class _ParsePageState extends State<ParsePage> {
     required String title,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(TdRadius.large),
-      child: Container(
-        width: width,
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
-        decoration: BoxDecoration(
-          color: TdPalette.gray1,
-          borderRadius: BorderRadius.circular(TdRadius.large),
+    // 官方 TDCell：图标走 leftIconWidget、箭头用自带的 arrow；
+    // 外层保留固定宽高的浅底容器（这是版式，不是控件）
+    return Container(
+      width: width,
+      height: 56,
+      decoration: BoxDecoration(
+        color: TdPalette.gray1,
+        borderRadius: BorderRadius.circular(TdRadius.large),
+      ),
+      child: TDCell(
+        title: title,
+        leftIconWidget: Icon(icon, size: 20, color: TdPalette.brand),
+        arrow: true,
+        hover: false,
+        bordered: false,
+        style: TDCellStyle(
+          context: context,
+          padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
+          backgroundColor: Colors.transparent,
+          titleStyle: TdText.bodyMedium,
         ),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, size: 20, color: TdPalette.brand),
-            const SizedBox(width: TdSpacer.xs),
-            Expanded(
-              child: Text(title,
-                  style: TdText.bodyMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-            ),
-            Icon(Icons.chevron_right, size: 16, color: TdPalette.gray6),
-          ],
-        ),
+        onClick: (cell) => onTap(),
       ),
     );
   }
@@ -338,13 +336,9 @@ class _ParsePageState extends State<ParsePage> {
       final selected = await showModalBottomSheet<FavFolder>(
         context: context,
         backgroundColor: Colors.transparent,
-        builder: (sheetContext) => Container(
-          decoration: BoxDecoration(
-            color: TdPalette.container,
-            borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(TdRadius.extraLarge)),
-          ),
-          padding: const EdgeInsets.all(TdSpacer.medium),
+        isScrollControlled: true,
+        // 官方弹层：面板骨架替代自绘的圆角容器
+        builder: (sheetContext) => TDPopupBottomDisplayPanel(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,23 +404,12 @@ class _ParsePageState extends State<ParsePage> {
 
   /// 输入既不是链接也不是 BV 号时，问一下要不要把它当关键词去站内搜索
   Future<void> _offerSearch(String keyword) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('这不是链接', style: TdText.titleSmall),
-        content: Text('要在站内搜索「$keyword」吗？'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('搜索'),
-          ),
-        ],
-      ),
+    // 统一走 tdConfirm（内部已是官方 TDAlertDialog）
+    final confirmed = await tdConfirm(
+      context,
+      title: '这不是链接',
+      content: '要在站内搜索「$keyword」吗？',
+      confirmText: '搜索',
     );
     if (confirmed != true || !mounted) return;
     await Navigator.of(context).push(

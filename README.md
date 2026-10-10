@@ -29,7 +29,7 @@ UI 采用腾讯 **TDesign Flutter** 官方组件库，音视频封装使用系�
 | 项目 | 值 |
 |---|---|
 | 包名 | `com.moko.downkyi` |
-| 版本 | v2.3.0（versionCode 27） |
+| 版本 | v2.3.1（versionCode 28） |
 | 作者 | **MokoKing666** · 672627254@qq.com |
 | 支持系统 | Android 7.0+（API 24 ~ 36） |
 | 架构 | **仅 arm64-v8a** |
@@ -114,9 +114,9 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 
 ## 🧾 更新日志
 
-### v2.3.0 —— 界面统一到 TDesign
+### v2.3.1 —— 界面统一到 TDesign
 
-界面里还在「自己画」的控件，全部换成 TDesign 官方组件：风格统一，以后只维护一套。
+界面里还在「自己画」的控件与面板，全部换成 TDesign 官方组件：风格统一，以后只维护一套。
 顺带修掉一个暗色模式的老毛病。
 
 **修掉：暗色模式下勾选框外面多出一块方框**
@@ -135,8 +135,9 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 | 输入框（搜索 / 链接 / Cookie） | `TDSearchBar`、`TDTextarea` |
 | 弹窗（输入、确认、删除订阅、关于） | `TDAlertDialog`、`TDConfirmDialog` |
 | 加载动画 / 进度条 | `TDLoading`、`TDProgress` |
-| 点击行（工具条目、缓存分组、主题外观、勾选行） | `TDCell` |
+| 点击行（工具条目、缓存分组、主题外观、勾选行、任务列表、视频条目） | `TDCell` |
 | 主题切换按钮 | `TDButton` |
+| 底部弹层（缓存清理、主题选择、下载设置、任务选择、格式转换、任务操作、收藏夹、字幕语言、弹幕样式等 10 处） | `TDPopupBottomDisplayPanel` + `TDSlidePopupRoute` |
 
 能看出来的变化：**勾选框统一成圆形**（此前自绘的是圆角方块，两种样式并存）、
 加载动画换成组件的转圈、弹窗与输入框的圆角/按钮/遮罩都跟着组件库走。
@@ -524,7 +525,7 @@ Android 的 `NotificationManagerService.IconManager` **按「包名 + 资源 ID�
 推荐从 [**Releases**](https://github.com/MokoKing666/DownKyi-Android/releases) 下载已构建好的 APK（arm64-v8a，约 63 MB）：
 
 ```bash
-adb install -r DownKyi-v2.3.0-arm64-v8a.apk
+adb install -r DownKyi-v2.3.1-arm64-v8a.apk
 ```
 
 > 仓库**不提交 APK 二进制**（`.gitignore` 已排除 `*.apk`），发版请走 GitHub Releases。

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../data/settings_store.dart';
 import '../td.dart';
@@ -19,11 +20,12 @@ class ThemePickerResult {
 /// 因此这里等面板完全关闭后再写入设置，避免在路由动画过程中拆掉 Navigator。
 Future<void> showThemePicker(BuildContext context) async {
   final settings = context.read<SettingsStore>();
-  final result = await showModalBottomSheet<ThemePickerResult>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (sheetContext) => _ThemePickerSheet(settings: settings),
+  final result = await Navigator.of(context).push<ThemePickerResult>(
+    TDSlidePopupRoute<ThemePickerResult>(
+      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+        child: _ThemePickerSheet(settings: settings),
+      ),
+    ),
   );
   if (result == null) return;
 
@@ -120,42 +122,37 @@ class _ThemeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
-        child: Row(
-          children: <Widget>[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(TdRadius.medium),
-              child: SizedBox(
-                width: 46,
-                height: 46,
-                child: Row(
-                  children: <Widget>[
-                    for (final color in style.preview)
-                      Expanded(child: ColoredBox(color: color)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: TdSpacer.small),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(style.label, style: TdText.bodyLarge),
-                  const SizedBox(height: 2),
-                  Text(style.description, style: TdText.bodySmall),
-                ],
-              ),
-            ),
-            if (selected)
-              Icon(Icons.check_circle, color: TdPalette.brand, size: 22),
-          ],
+    // 官方 TDCell：色板预览走 leftIconWidget，选中标记走 rightIconWidget
+    return TDCell(
+      title: style.label,
+      description: style.description,
+      leftIconWidget: ClipRRect(
+        borderRadius: BorderRadius.circular(TdRadius.medium),
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Row(
+            children: <Widget>[
+              for (final color in style.preview)
+                Expanded(child: ColoredBox(color: color)),
+            ],
+          ),
         ),
       ),
+      rightIconWidget: selected
+          ? Icon(Icons.check_circle, color: TdPalette.brand, size: 22)
+          : null,
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
+        padding: const EdgeInsets.symmetric(
+            horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyLarge,
+        descriptionStyle: TdText.bodySmall,
+      ),
+      onClick: (cell) => onTap(),
     );
   }
 }

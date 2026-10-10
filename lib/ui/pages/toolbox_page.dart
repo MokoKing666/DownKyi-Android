@@ -152,17 +152,11 @@ class ToolboxPage extends StatelessWidget {
       tdToast(context, '还没有已完成的任务');
       return null;
     }
-    return showModalBottomSheet<DownloadTask>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(TdRadius.extraLarge)),
-        ),
-        child: SafeArea(
-          top: false,
+    // 官方弹层：面板骨架替代「Container + SafeArea」两层自绘
+    return Navigator.of(context).push<DownloadTask>(
+      TDSlidePopupRoute<DownloadTask>(
+        builder: (sheetContext) => TDPopupBottomDisplayPanel(
+          maxHeightRatio: 0.72,
           child: ConstrainedBox(
             constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.72),
@@ -384,17 +378,10 @@ class ToolboxPage extends StatelessWidget {
     required MediaProbe? probe,
     required String baseName,
   }) {
-    return showModalBottomSheet<ConvertTarget>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(TdRadius.extraLarge)),
-        ),
-        child: SafeArea(
-          top: false,
+    return Navigator.of(context).push<ConvertTarget>(
+      TDSlidePopupRoute<ConvertTarget>(
+        builder: (sheetContext) => TDPopupBottomDisplayPanel(
+          maxHeightRatio: 0.78,
           child: ConstrainedBox(
             constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.78),
@@ -514,18 +501,9 @@ class ToolboxPage extends StatelessWidget {
 
   Future<void> _showActions(
       BuildContext context, DownloadManager manager, DownloadTask task) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(TdRadius.extraLarge)),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: TdSpacer.small),
-        child: SafeArea(
-          top: false,
+    await Navigator.of(context).push<void>(
+      TDSlidePopupRoute<void>(
+        builder: (sheetContext) => TDPopupBottomDisplayPanel(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[

@@ -658,16 +658,15 @@ class SettingsPage extends StatelessWidget {
     final selected = <String>{...settings.subtitleLanguages};
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: TdPalette.container,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => SafeArea(
-          child: Column(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      // 官方弹层：标题与关闭按钮交给面板表头
+      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+        title: '下载哪些语言的字幕',
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) => Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.all(TdSpacer.medium),
-                child: Text('下载哪些语言的字幕', style: TdText.titleSmall),
-              ),
               for (final language in SubtitleLanguage.all)
                 TdCheckRow(
                   title: language.label,
@@ -720,18 +719,16 @@ class SettingsPage extends StatelessWidget {
     var style = settings.danmakuStyle;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: TdPalette.container,
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => SafeArea(
-          child: SingleChildScrollView(
+      // 官方弹层：标题与关闭按钮交给面板表头
+      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+        title: '弹幕 ASS 样式',
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) => SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.all(TdSpacer.medium),
-                  child: Text('弹幕 ASS 样式', style: TdText.titleSmall),
-                ),
                 _styleGroup<double>(
                   '字号',
                   const <double>[0.6, 0.8, 1.0, 1.2, 1.5],
@@ -902,10 +899,9 @@ class SettingsPage extends StatelessWidget {
     final lines = AppLog.lines;
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('运行日志', style: TdText.titleSmall),
-        content: SizedBox(
+      builder: (dialogContext) => TDConfirmDialog(
+        title: '运行日志',
+        contentWidget: SizedBox(
           width: double.maxFinite,
           height: 360,
           child: lines.isEmpty
@@ -918,11 +914,8 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
         ),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('关闭')),
-        ],
+        buttonText: '关闭',
+        action: () => Navigator.of(dialogContext).pop(),
       ),
     );
   }

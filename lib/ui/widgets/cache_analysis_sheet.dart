@@ -22,12 +22,12 @@ Future<int?> showCacheAnalysisSheet(
     tdToast(context, '工作目录是空的，没有可清理的内容');
     return null;
   }
-  return showModalBottomSheet<int>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (_) => _CacheAnalysisSheet(manager: manager, groups: groups),
-  );
+  // 官方弹层：面板骨架（圆角、拖拽、关闭按钮、高度约束）交给 TDesign
+  return Navigator.of(context).push<int>(TDSlidePopupRoute<int>(
+    builder: (_) => TDPopupBottomDisplayPanel(
+      child: _CacheAnalysisSheet(manager: manager, groups: groups),
+    ),
+  ));
 }
 
 class _CacheAnalysisSheet extends StatefulWidget {
@@ -126,15 +126,8 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
         TdSpacer.medium,
         TdSpacer.small,
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(child: Text('缓存分析', style: TdText.titleSmall)),
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Icon(Icons.close, size: 20, color: TdPalette.gray6),
-          ),
-        ],
-      ),
+      // 关闭按钮交给官方弹层的表头，这里只保留标题
+      child: Text('缓存分析', style: TdText.titleSmall),
     );
   }
 

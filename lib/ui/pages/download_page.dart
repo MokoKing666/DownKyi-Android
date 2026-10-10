@@ -160,50 +160,34 @@ class _DownloadPageState extends State<DownloadPage> {
     }
 
     // true = 连文件一起删，false = 只删记录，null = 取消
-    final deleteFiles = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(TdRadius.extraLarge)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  TdSpacer.medium,
-                  TdSpacer.medium,
-                  TdSpacer.medium,
-                  TdSpacer.xs,
-                ),
-                child: Text('清空已完成记录（$count 个）', style: TdText.titleSmall),
-              ),
-              TDCell(
-                title: '只删除记录',
-                description: '已下载的文件会保留（含系统相册里的）',
-                leftIcon: Icons.playlist_remove,
-                arrow: true,
-                onClick: (cell) => Navigator.of(sheetContext).pop(false),
-              ),
-              TDCell(
-                title: '删除记录和源文件',
-                description: '同时删除已下载的文件，不可恢复',
-                leftIcon: Icons.delete_forever_outlined,
-                arrow: true,
-                onClick: (cell) => Navigator.of(sheetContext).pop(true),
-              ),
-              const SizedBox(height: TdSpacer.xs),
-            ],
-          ),
+    // 官方弹层：标题走面板的 title（自带关闭按钮），内容只留两个选项
+    final deleteFiles =
+        await Navigator.of(context).push<bool>(TDSlidePopupRoute<bool>(
+      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+        title: '清空已完成记录（$count 个）',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            TDCell(
+              title: '只删除记录',
+              description: '已下载的文件会保留（含系统相册里的）',
+              leftIcon: Icons.playlist_remove,
+              arrow: true,
+              onClick: (cell) => Navigator.of(sheetContext).pop(false),
+            ),
+            TDCell(
+              title: '删除记录和源文件',
+              description: '同时删除已下载的文件，不可恢复',
+              leftIcon: Icons.delete_forever_outlined,
+              arrow: true,
+              onClick: (cell) => Navigator.of(sheetContext).pop(true),
+            ),
+            const SizedBox(height: TdSpacer.xs),
+          ],
         ),
       ),
-    );
+    ));
 
     if (deleteFiles == null || !context.mounted) return;
 
