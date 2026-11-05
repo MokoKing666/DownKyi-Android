@@ -23,7 +23,7 @@ dependencies:
   shared_preferences: ^2.2.0
 
   # WBI 签名需要的 md5
-  crypto: ^3.0.0
+  crypto: ^3.0.8
 
   # 登录二维码
   qr_flutter: ^4.1.0
