@@ -89,25 +89,12 @@ class _LoginPageState extends State<LoginPage> {
                   style: TdText.bodySmall,
                 ),
                 const SizedBox(height: TdSpacer.small),
-                Container(
-                  decoration: BoxDecoration(
-                    color: TdPalette.gray1,
-                    borderRadius: BorderRadius.circular(TdRadius.medium),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: TdSpacer.small),
-                  child: TextField(
-                    controller: _cookieController,
-                    maxLines: 4,
-                    minLines: 2,
-                    style: TdText.bodySmall,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx',
-                      hintStyle: TextStyle(
-                          color: TdPalette.textPlaceholder, fontSize: 12),
-                    ),
-                  ),
+                TDTextarea(
+                  controller: _cookieController,
+                  maxLines: 4,
+                  minLines: 2,
+                  hintText: 'SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx',
+                  backgroundColor: TdPalette.gray1,
                 ),
                 const SizedBox(height: TdSpacer.small),
                 TDButton(

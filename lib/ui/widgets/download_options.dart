@@ -4,9 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
+import '../../core/formatter.dart';
+import '../../download/device_capabilities.dart';
+import '../../download/download_rules.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
 import 'choice.dart';
+
+/// 解码能力只探测一次，之后复用（探测本身要遍历 MediaCodecList，不必每次重建都做）
+DeviceCapabilities? _capabilityCache;
+
+Future<DeviceCapabilities> _capabilities() async {
+  return _capabilityCache ??= await DeviceCapabilities.load();
+}
 
 /// 下载选项面板：清晰度 / 视频编码 / 音频 / 下载内容。
 ///
@@ -61,6 +71,8 @@ class DownloadOptionsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sections = <Widget>[
+      // 偏好模式放最前面：它是「先决定思路」，后面的清晰度/编码都会被它带着走
+      _wrap('智能选档', _modeChild()),
       _wrap('清晰度', _qualityChild()),
       if (_codecs.length > 1) _wrap('视频编码', _codecChild()),
       if (_showAudio) _wrap('音频', _audioChild()),
@@ -109,9 +121,30 @@ class DownloadOptionsPanel extends StatelessWidget {
     return TdChoiceGroup<int>(
       items: qualities,
       selected: parse.quality,
-      labelBuilder: parse.qualityLabel,
+      // 标签带上预估体积，让「画质 vs 体积」可以在同一行里直接比较
+      labelBuilder: _qualityLabelWithSize,
       onSelect: (value) => _apply(() => parse.setQuality(value)),
     );
+  }
+
+  /// 清晰度标签 + 预估体积（评审第 16 项）。
+  /// DASH 拿不到真实总长，这里是按码率 × 时长估算，误差通常在 5% 以内。
+  ///
+  /// ⚠️ 必须算**视频 + 音频**：这里只算视频轨的话，标签会明显小于最终文件，
+  /// 用户会以为「合并把文件撑大了」。杜比视界这类片源常配杜比全景声 / Hi-Res 音轨，
+  /// 一部 30 分钟的视频音轨本身就能有 300 MB 量级，差额非常扎眼。
+  String _qualityLabelWithSize(int quality) {
+    final base = parse.qualityLabel(quality);
+    final dash = parse.dash;
+    if (dash == null) return base;
+    final bytes = MediaEstimator.totalBytes(
+      dash,
+      quality: quality,
+      codec: parse.codec,
+      audioId: parse.audioId,
+    );
+    if (bytes <= 0) return base;
+    return '$base · 共 ${formatBytes(bytes)}';
   }
 
   Widget _codecChild() {
@@ -170,7 +203,7 @@ class DownloadOptionsPanel extends StatelessWidget {
         ),
         TdCheckRow(
           title: '字幕',
-          description: '优先下载中文（CC）字幕，转为 srt',
+          description: '语言：${parse.settings.subtitleSummary}（设置页可多选）',
           value: parse.wantSubtitle,
           onChanged: (value) => _apply(() => parse.wantSubtitle = value),
         ),
@@ -239,35 +272,168 @@ class DownloadOptionsPanel extends StatelessWidget {
     }
   }
 
+  /// 智能选档：切换模式时立刻按模式把清晰度 / 编码 / 音轨都重新选好，
+  /// 而不是只把一个开关存起来——用户要的是结果，不是配置项。
+  Widget _modeChild() {
+    final settings = parse.settings;
+    final dash = parse.dash;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        TdChoiceGroup<PreferenceMode>(
+          items: PreferenceMode.values,
+          selected: settings.preferenceMode,
+          labelBuilder: (value) => value.label,
+          onSelect: _applyMode,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          settings.preferenceMode.description,
+          style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+        ),
+        if (dash != null) ...<Widget>[
+          const SizedBox(height: 2),
+          Text(
+            '当前组合预估体积 '
+            '${MediaEstimator.describe(dash, quality: parse.quality, codec: parse.codec, audioId: parse.audioId)}',
+            style: TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+          ),
+        ],
+        const SizedBox(height: 6),
+        _DeviceCapabilityCard(
+          parse: parse,
+          onRecommend: _applyMode,
+        ),
+      ],
+    );
+  }
+
+  void _applyMode(PreferenceMode mode) {
+    final settings = parse.settings;
+    unawaited(settings.update(() => settings.preferenceMode = mode));
+
+    final dash = parse.dash;
+    if (dash == null) {
+      _apply(() {});
+      return;
+    }
+    final quality = SmartPicker.pickQuality(dash, mode);
+    final codec = SmartPicker.pickCodec(dash, quality, mode);
+    final audioId = SmartPicker.pickAudioId(dash, mode);
+    _apply(() {
+      parse.setQuality(quality);
+      if (codec != null) parse.setCodec(codec);
+      if (audioId != null) parse.setAudioId(audioId);
+    });
+  }
+
   Future<void> _editCustomDir(BuildContext context) async {
     final settings = parse.settings;
     final controller = TextEditingController(text: settings.downloadDir);
     final value = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('自定义下载目录', style: TdText.titleSmall),
-        content: TextField(
+      builder: (dialogContext) => TDAlertDialog(
+        title: '自定义下载目录',
+        contentWidget: TDInput(
           controller: controller,
-          decoration: const InputDecoration(
-            hintText: '例如 /storage/emulated/0/Download/DownKyi',
-          ),
+          hintText: '例如 /storage/emulated/0/Download/DownKyi',
+          backgroundColor: TdPalette.gray1,
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
+        leftBtn: TDDialogButtonOptions(
+          title: '取消',
+          action: () => Navigator.of(dialogContext).pop(),
+        ),
+        rightBtn: TDDialogButtonOptions(
+          title: '保存',
+          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+        ),
       ),
     );
     if (value == null) return;
     _apply(
         () => unawaited(settings.update(() => settings.downloadDir = value)));
+  }
+}
+
+/// 本机解码能力卡片（评审第 17 项）。
+///
+/// 探测是异步的，所以做成独立的 StatefulWidget 自己管加载——
+/// 免得把「设备能力」这种和视频解析无关的状态塞进 ParseController。
+///
+/// 这里只给**建议**，不做拦截：设备上报的 profileLevels 经常缺项，
+/// 硬拦会把本来能播的设备误判掉。
+class _DeviceCapabilityCard extends StatefulWidget {
+  const _DeviceCapabilityCard({required this.parse, required this.onRecommend});
+
+  final ParseController parse;
+  final void Function(PreferenceMode mode) onRecommend;
+
+  @override
+  State<_DeviceCapabilityCard> createState() => _DeviceCapabilityCardState();
+}
+
+class _DeviceCapabilityCardState extends State<_DeviceCapabilityCard> {
+  DeviceCapabilities _caps = DeviceCapabilities.unknown;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    final caps = await _capabilities();
+    if (!mounted) return;
+    setState(() {
+      _caps = caps;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder =
+        TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder);
+    if (_loading) {
+      return Text('正在检测本机解码能力…', style: placeholder);
+    }
+    if (!_caps.probed) {
+      return Text('未能读取本机解码能力，已跳过兼容性提示', style: placeholder);
+    }
+
+    final parse = widget.parse;
+    final quality = parse.quality;
+    final codec = parse.codec;
+    final warnings = parse.dash == null
+        ? const <String>[]
+        : _caps.warningsFor(quality: quality, codec: codec);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: TdSpacer.small,
+          runSpacing: 2,
+          children: <Widget>[
+            for (final row in _caps.rows)
+              Text(
+                '${row.ok ? '✓' : '✗'} ${row.label}',
+                style: TdText.bodySmall.copyWith(
+                  color: row.ok ? TdPalette.brand : TdPalette.textPlaceholder,
+                ),
+              ),
+          ],
+        ),
+        for (final warning in warnings)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '⚠ $warning',
+              style: TdText.bodySmall.copyWith(color: TdPalette.warning),
+            ),
+          ),
+      ],
+    );
   }
 }

@@ -8,11 +8,13 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
 import '../../core/formatter.dart';
-import '../../data/bili_api.dart';
+import '../../core/logger.dart';
+import '../../bili/bili_api.dart';
 import '../../data/download_task.dart';
 import '../../data/settings_store.dart';
 import '../../download/danmaku_writer.dart';
 import '../../download/download_manager.dart';
+import '../../download/ffmpeg_ops.dart';
 import '../../download/ffmpeg_service.dart';
 import '../../native/bridge.dart';
 import '../td.dart';
@@ -150,17 +152,11 @@ class ToolboxPage extends StatelessWidget {
       tdToast(context, '还没有已完成的任务');
       return null;
     }
-    return showModalBottomSheet<DownloadTask>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(TdRadius.extraLarge)),
-        ),
-        child: SafeArea(
-          top: false,
+    // 官方弹层：面板骨架替代「Container + SafeArea」两层自绘
+    return Navigator.of(context).push<DownloadTask>(
+      TDSlidePopupRoute<DownloadTask>(
+        builder: (sheetContext) => TDPopupBottomDisplayPanel(
+          maxHeightRatio: 0.72,
           child: ConstrainedBox(
             constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.72),
@@ -245,6 +241,14 @@ class ToolboxPage extends StatelessWidget {
     required String source,
     required String baseName,
   }) async {
+    // 精简包排除了 FFmpeg 原生库（见 tools/build_lite.ps1）。
+    // 在这里统一拦一次：否则会崩在「找不到 native 库」上，
+    // 那个报错对用户完全没有意义。
+    final unavailable = BuildFlavor.ffmpegUnavailableReason;
+    if (unavailable != null) {
+      tdToast(context, unavailable);
+      return;
+    }
     final manager = context.read<DownloadManager>();
     final workDir = await manager.ensureDownloadDir();
     final convertDir = Directory('$workDir/.convert');
@@ -374,17 +378,10 @@ class ToolboxPage extends StatelessWidget {
     required MediaProbe? probe,
     required String baseName,
   }) {
-    return showModalBottomSheet<ConvertTarget>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(TdRadius.extraLarge)),
-        ),
-        child: SafeArea(
-          top: false,
+    return Navigator.of(context).push<ConvertTarget>(
+      TDSlidePopupRoute<ConvertTarget>(
+        builder: (sheetContext) => TDPopupBottomDisplayPanel(
+          maxHeightRatio: 0.78,
           child: ConstrainedBox(
             constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.78),
@@ -504,18 +501,9 @@ class ToolboxPage extends StatelessWidget {
 
   Future<void> _showActions(
       BuildContext context, DownloadManager manager, DownloadTask task) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: TdPalette.container,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(TdRadius.extraLarge)),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: TdSpacer.small),
-        child: SafeArea(
-          top: false,
+    await Navigator.of(context).push<void>(
+      TDSlidePopupRoute<void>(
+        builder: (sheetContext) => TDPopupBottomDisplayPanel(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -589,6 +577,43 @@ class ToolboxPage extends StatelessWidget {
     );
   }
 
+  /// 用 FFmpeg 无损重新封装。
+  ///
+  /// 为什么优先于系统 MediaMuxer（见 FfmpegOps.remux 的注释）：
+  /// B 站片源普遍带 B 帧，解码顺序里 PTS 天然回退，而 MediaMuxer 对这种
+  /// 非单调时间戳的处理在各 Android 版本 / OEM 上不一致，最坏会丢掉回退的样本——
+  /// 表现就是「画面一顿一顿的」，但文件大小、轨道数、时长全都正常。
+  /// FFmpeg 的 `-c copy` 会正确写 ctts，不依赖设备实现。
+  ///
+  /// 返回 false 时调用方回退到 MediaMuxer（精简包排除了 FFmpeg，只能用后者）。
+  static Future<bool> _remuxWithFfmpeg({
+    required String? video,
+    required String? audio,
+    required String output,
+  }) async {
+    if (!BuildFlavor.supportsFfmpeg) return false;
+    final first = video ?? audio;
+    if (first == null) return false;
+    // 同一时间只能跑一个 FFmpeg 任务
+    if (FfmpegService.isBusy) return false;
+
+    try {
+      final result = await FfmpegService.run(
+        FfmpegOps.remux(
+          video: first,
+          audio: video == null ? null : audio,
+          output: output,
+        ),
+      );
+      if (!result.success) return false;
+      final file = File(output);
+      return await file.exists() && await file.length() > 1024;
+    } catch (error) {
+      AppLog.e('Toolbox', 'FFmpeg 重新封装失败，回退系统封装', error);
+      return false;
+    }
+  }
+
   Future<void> _export(BuildContext context, DownloadTask task) async {
     final manager = context.read<DownloadManager>();
     tdLoadingShow(context, text: '导出中');
@@ -625,11 +650,20 @@ class ToolboxPage extends StatelessWidget {
             : '$current.mp4');
 
     if (context.mounted) tdLoadingShow(context, text: '合并中');
-    final ok = await NativeBridge.mux(
-      video: hasVideo ? videoPath : null,
-      audio: hasAudio ? audioPath : null,
-      output: target,
-    );
+    // 默认走系统 MediaMuxer（与播放器兼容性最好）；只有用户显式切到 FFmpeg
+    // 时才先试 FFmpeg，失败仍回退 MediaMuxer。详见 MuxEngine 的注释。
+    final ok = (manager.settings.useFfmpegForMux
+            ? await _remuxWithFfmpeg(
+                video: hasVideo ? videoPath : null,
+                audio: hasAudio ? audioPath : null,
+                output: target,
+              )
+            : false) ||
+        await NativeBridge.mux(
+          video: hasVideo ? videoPath : null,
+          audio: hasAudio ? audioPath : null,
+          output: target,
+        );
 
     if (!ok) {
       if (context.mounted) {
@@ -734,37 +768,30 @@ class _ToolEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: <Widget>[
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: TdPalette.brandLight,
-                    borderRadius: BorderRadius.circular(TdRadius.medium),
-                  ),
-                  child: Icon(icon, size: 19, color: TdPalette.brand),
-                ),
-                const SizedBox(width: TdSpacer.small),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(title, style: TdText.bodyLarge),
-                      const SizedBox(height: 2),
-                      Text(description, style: TdText.bodySmall),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 20, color: TdPalette.gray6),
-              ],
+        // 官方 TDCell：图标走 leftIconWidget，箭头用组件自带的 arrow
+        TDCell(
+          title: title,
+          description: description,
+          leftIconWidget: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: TdPalette.brandLight,
+              borderRadius: BorderRadius.circular(TdRadius.medium),
             ),
+            child: Icon(icon, size: 19, color: TdPalette.brand),
           ),
+          arrow: true,
+          hover: false,
+          bordered: false,
+          style: TDCellStyle(
+            context: context,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            backgroundColor: Colors.transparent,
+            titleStyle: TdText.bodyLarge,
+            descriptionStyle: TdText.bodySmall,
+          ),
+          onClick: (cell) => onTap(),
         ),
         if (showDivider) TDDivider(height: 0.5, color: TdPalette.divider),
       ],
@@ -803,15 +830,14 @@ class _ConvertDialog extends StatelessWidget {
               builder: (context, value, _) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(TdRadius.round),
-                    child: LinearProgressIndicator(
-                      value: value <= 0 ? null : value.clamp(0.0, 1.0),
-                      minHeight: 6,
-                      backgroundColor: TdPalette.gray2,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(TdPalette.brand),
-                    ),
+                  TDProgress(
+                    type: TDProgressType.linear,
+                    value: value <= 0 ? 0 : value.clamp(0.0, 1.0),
+                    strokeWidth: 6,
+                    color: TdPalette.brand,
+                    backgroundColor: TdPalette.gray2,
+                    showLabel: false,
+                    linearBorderRadius: BorderRadius.circular(TdRadius.round),
                   ),
                   const SizedBox(height: TdSpacer.xs),
                   Text(

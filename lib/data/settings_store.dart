@@ -1,7 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:convert';
+
+import '../bili/subtitles.dart';
 import '../core/constants.dart';
+import '../core/secret_store.dart';
+import '../download/danmaku_writer.dart';
+import '../download/download_rules.dart';
 import '../ui/theme.dart';
 import 'http_client.dart';
 
@@ -33,6 +39,15 @@ class SettingsStore extends ChangeNotifier {
   static const String _kGifFps = 'convert_gif_fps';
   static const String _kSubCheck = 'subscription_check_enabled';
   static const String _kSubInterval = 'subscription_interval_hours';
+  static const String _kPreferenceMode = 'preference_mode';
+  static const String _kSubtitleLangs = 'subtitle_languages';
+  static const String _kDanmakuStyle = 'danmaku_style';
+  static const String _kSmartAuto = 'smart_auto_select';
+  static const String _kMuxEngine = 'mux_engine';
+  static const String _kTaskInterval = 'task_interval_seconds';
+  static const String _kArchiveEnabled = 'archive_enabled';
+  static const String _kAiSubtitle = 'ai_subtitle_strategy';
+  static const String _kEmbedMetadata = 'embed_metadata';
 
   static const String defaultAria2Url = 'http://127.0.0.1:6800/jsonrpc';
 
@@ -86,6 +101,39 @@ class SettingsStore extends ChangeNotifier {
   /// 可选的检查间隔
   static const List<int> subscriptionIntervalOptions = <int>[1, 3, 6, 12, 24];
 
+  /// 下载偏好模式（评审第 15 项「智能下载」）
+  PreferenceMode preferenceMode = PreferenceMode.bestQuality;
+
+  /// 是否在打开解析结果时按偏好模式自动选档。
+  /// 关掉就退化成「记住上次的选择」，给喜欢手动的人留一条路。
+  bool smartAutoSelect = true;
+
+  /// 要下载的字幕语言（评审第 21 项）。空表示不下字幕。
+  List<String> subtitleLanguages = const <String>[SubtitleLanguage.defaultCode];
+
+  /// 弹幕 ASS 样式（评审第 22 项）
+  DanmakuStyle danmakuStyle = const DanmakuStyle();
+
+  /// 合并用哪套实现。默认系统 MediaMuxer——封装是核心链路，兼容性优先。
+  MuxEngine muxEngine = MuxEngine.system;
+
+  bool get useFfmpegForMux => muxEngine == MuxEngine.ffmpeg;
+
+  /// 任务启动间隔（秒）。0 = 不限（默认，保持 v2.0 行为）。
+  /// 批量下载时把它调到 2~5 秒可以显著降低被 B 站风控（-412）的概率。
+  int taskIntervalSeconds = 0;
+
+  /// 下载归档：跳过「以前下载过」的媒体（按 BV/分P/清晰度/编码/音轨判定）。
+  /// 默认开。关掉就能重复下载同一视频。
+  bool archiveEnabled = true;
+
+  /// AI 字幕策略（默认人工优先）
+  AiSubtitleStrategy aiSubtitleStrategy = AiSubtitleStrategy.preferHuman;
+
+  /// 合并后把标题 / UP 主 / 封面写进成品（FFmpeg，默认关）。
+  /// 属于 FFmpeg 重封装，兼容性风险见 MuxEngine 的注释。
+  bool embedMetadata = false;
+
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -128,12 +176,29 @@ class SettingsStore extends ChangeNotifier {
     followSystemDark = prefs.getBool(_kFollowSystemDark) ?? true;
     downloadEngine = DownloadEngine.fromName(prefs.getString(_kEngine));
     aria2RpcUrl = prefs.getString(_kAria2Url) ?? defaultAria2Url;
-    aria2Secret = prefs.getString(_kAria2Secret) ?? '';
+    // 敏感数据：优先读加密存储，读不到再回落到旧版明文并就地迁移。
+    // 加密存储不可用时保留明文——宁可暂时不够安全，也不能让用户掉登录。
+    aria2Secret = await SecretStore.read(
+      SecretStore.keyAria2Secret,
+      legacy: prefs.getString(_kAria2Secret) ?? '',
+    );
+    if (SecretStore.available) await prefs.remove(_kAria2Secret);
     aria2Split = prefs.getInt(_kAria2Split) ?? 16;
     aria2Dir = prefs.getString(_kAria2Dir) ?? '';
     gifFps = prefs.getInt(_kGifFps) ?? 12;
     subscriptionCheckEnabled = prefs.getBool(_kSubCheck) ?? true;
     subscriptionIntervalHours = prefs.getInt(_kSubInterval) ?? 6;
+    muxEngine = MuxEngine.fromName(prefs.getString(_kMuxEngine));
+    taskIntervalSeconds = prefs.getInt(_kTaskInterval) ?? 0;
+    archiveEnabled = prefs.getBool(_kArchiveEnabled) ?? true;
+    aiSubtitleStrategy =
+        AiSubtitleStrategy.fromName(prefs.getString(_kAiSubtitle));
+    embedMetadata = prefs.getBool(_kEmbedMetadata) ?? false;
+    preferenceMode = PreferenceMode.fromName(prefs.getString(_kPreferenceMode));
+    smartAutoSelect = prefs.getBool(_kSmartAuto) ?? true;
+    subtitleLanguages =
+        _decodeSubtitleLanguages(prefs.getString(_kSubtitleLangs));
+    danmakuStyle = _decodeDanmakuStyle(prefs.getString(_kDanmakuStyle));
 
     final savedFormat = prefs.getString(_kDanmaku) ?? DanmakuFormat.ass.name;
     danmakuFormat = DanmakuFormat.values.firstWhere(
@@ -141,11 +206,15 @@ class SettingsStore extends ChangeNotifier {
       orElse: () => DanmakuFormat.ass,
     );
 
-    // Cookie 恢复
-    final cookie = prefs.getString(_kCookie) ?? '';
+    // Cookie 恢复（同样：先加密存储，读不到再拿旧明文迁移）
+    final cookie = await SecretStore.read(
+      SecretStore.keyCookie,
+      legacy: prefs.getString(_kCookie) ?? '',
+    );
     if (cookie.isNotEmpty) {
       AppHttp.instance.setCookieHeader(cookie);
     }
+    if (SecretStore.available) await prefs.remove(_kCookie);
     _loaded = true;
     notifyListeners();
   }
@@ -171,24 +240,62 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setBool(_kFollowSystemDark, followSystemDark);
     await prefs.setString(_kEngine, downloadEngine.name);
     await prefs.setString(_kAria2Url, aria2RpcUrl);
-    await prefs.setString(_kAria2Secret, aria2Secret);
     await prefs.setInt(_kAria2Split, aria2Split);
     await prefs.setString(_kAria2Dir, aria2Dir);
     await prefs.setInt(_kGifFps, gifFps);
     await prefs.setBool(_kSubCheck, subscriptionCheckEnabled);
     await prefs.setInt(_kSubInterval, subscriptionIntervalHours);
-    await prefs.setString(_kCookie, AppHttp.instance.cookieHeader);
+    await prefs.setString(_kPreferenceMode, preferenceMode.name);
+    await prefs.setString(_kMuxEngine, muxEngine.name);
+    await prefs.setInt(_kTaskInterval, taskIntervalSeconds);
+    await prefs.setBool(_kArchiveEnabled, archiveEnabled);
+    await prefs.setString(_kAiSubtitle, aiSubtitleStrategy.name);
+    await prefs.setBool(_kEmbedMetadata, embedMetadata);
+    await prefs.setBool(_kSmartAuto, smartAutoSelect);
+    await prefs.setString(_kSubtitleLangs, jsonEncode(subtitleLanguages));
+    await prefs.setString(_kDanmakuStyle, jsonEncode(danmakuStyle.toJson()));
+    await _saveSecrets(prefs);
+  }
+
+  /// 落盘敏感数据（Cookie / aria2 密钥）。
+  ///
+  /// 加密存储可用时**只**写加密存储，并删掉 SharedPreferences 里的明文残留——
+  /// 保留明文等于白加密。只有加密存储不可用时才保留明文，
+  /// 因为让用户因为 keystore 异常而掉登录，比明文存着更糟。
+  Future<void> _saveSecrets(SharedPreferences prefs) async {
+    await SecretStore.write(SecretStore.keyAria2Secret, aria2Secret);
+    await SecretStore.write(
+        SecretStore.keyCookie, AppHttp.instance.cookieHeader);
+    if (SecretStore.available) {
+      await prefs.remove(_kAria2Secret);
+      await prefs.remove(_kCookie);
+    } else {
+      await prefs.setString(_kAria2Secret, aria2Secret);
+      await prefs.setString(_kCookie, AppHttp.instance.cookieHeader);
+    }
   }
 
   Future<void> saveCookies() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kCookie, AppHttp.instance.cookieHeader);
+    await _saveSecrets(prefs);
   }
 
   Future<void> clearCookies() async {
     AppHttp.instance.clearCookies();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kCookie);
+    await SecretStore.delete(SecretStore.keyCookie);
+    notifyListeners();
+  }
+
+  /// 退出登录：清空全部敏感数据（含加密存储）
+  Future<void> clearSecrets() async {
+    AppHttp.instance.clearCookies();
+    await SecretStore.clear();
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in SecretStore.allKeys) {
+      await prefs.remove(key);
+    }
     notifyListeners();
   }
 
@@ -210,4 +317,39 @@ class SettingsStore extends ChangeNotifier {
         13 => 'av1',
         _ => 'avc',
       };
+
+  /// 偏好模式的说明文案，给设置页直接用
+  String get preferenceModeDescription => preferenceMode.description;
+
+  /// 字幕语言的可读清单，例如「简体中文 / English」
+  String get subtitleSummary => subtitleLanguages.isEmpty
+      ? '不下字幕'
+      : subtitleLanguages.map(SubtitleLanguage.labelOf).join(' / ');
+
+  static List<String> _decodeSubtitleLanguages(String? raw) {
+    if (raw == null || raw.isEmpty)
+      return const <String>[SubtitleLanguage.defaultCode];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((item) => '$item').toList(growable: false);
+      }
+    } catch (_) {
+      // 配置坏了不该让 App 起不来
+    }
+    return const <String>[SubtitleLanguage.defaultCode];
+  }
+
+  static DanmakuStyle _decodeDanmakuStyle(String? raw) {
+    if (raw == null || raw.isEmpty) return const DanmakuStyle();
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return DanmakuStyle.fromJson(decoded.cast<String, Object?>());
+      }
+    } catch (_) {
+      // 同上
+    }
+    return const DanmakuStyle();
+  }
 }

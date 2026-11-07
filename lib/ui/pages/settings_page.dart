@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
+import '../../bili/subtitles.dart';
 import '../../core/constants.dart';
 import '../../core/logger.dart';
+import '../../core/secret_store.dart';
 import '../../data/http_client.dart';
 import '../../data/settings_store.dart';
+import '../../download/download_archive.dart';
 import '../../download/download_manager.dart';
+import '../../download/download_rules.dart';
 import '../../subscription/subscription_scheduler.dart';
 import '../td.dart';
 import '../theme.dart';
@@ -30,6 +34,34 @@ class SettingsPage extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.only(bottom: TdSpacer.large),
         children: <Widget>[
+          // ---------------- 凭据降级警告 ----------------
+          // 加密存储不可用时，凭据会以明文落在 SharedPreferences。
+          // 旧实现是静默降级——用户不知道自己的 SESSDATA 正以明文存储。
+          // 审查明确要求「不得在未告知用户的情况下降级」，所以置顶显示。
+          if (!SecretStore.available) ...<Widget>[
+            Container(
+              padding: const EdgeInsets.all(TdSpacer.medium),
+              decoration: BoxDecoration(
+                color: TdPalette.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(TdRadius.large),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('加密存储不可用', style: TdText.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    '系统密钥库初始化失败，Cookie 与 aria2 密钥正以明文存储。'
+                    '请勿在不可信的设备上使用，也不要把运行日志贴给陌生人。',
+                    style: TdText.bodySmall
+                        .copyWith(color: TdPalette.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: TdSpacer.small),
+          ],
+
           // ---------------- 主题外观 ----------------
           TdSection(
             title: '主题外观',
@@ -238,6 +270,133 @@ class SettingsPage extends StatelessWidget {
                   onSelect: (value) => settings
                       .update(() => settings.segmentConcurrency = value),
                 ),
+                const SizedBox(height: TdSpacer.medium),
+                Text(
+                    '任务启动间隔：${settings.taskIntervalSeconds == 0 ? '不限' : '${settings.taskIntervalSeconds} 秒'}',
+                    style: TdText.bodyMedium),
+                const SizedBox(height: TdSpacer.xs),
+                TdChoiceGroup<int>(
+                  items: const <int>[0, 2, 5, 10],
+                  selected: settings.taskIntervalSeconds,
+                  labelBuilder: (value) => value == 0 ? '不限' : '$value 秒',
+                  onSelect: (value) => settings
+                      .update(() => settings.taskIntervalSeconds = value),
+                ),
+                const SizedBox(height: TdSpacer.xs),
+                Text(
+                  '批量下载时把任务启动错开，能显著降低被 B 站风控（-412）的概率。'
+                  '只在批量下载经常失败时才需要调。',
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 下载偏好（智能选档）----------------
+          TdSection(
+            title: '下载偏好',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TdChoiceGroup<PreferenceMode>(
+                  items: PreferenceMode.values,
+                  selected: settings.preferenceMode,
+                  labelBuilder: (value) => value.label,
+                  onSelect: (value) =>
+                      settings.update(() => settings.preferenceMode = value),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  settings.preferenceMode.description,
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '打开解析结果时会按偏好自动选好清晰度 / 编码 / 音轨，之后也可以手动改。'
+                  '选档时会给出手势体积预估与本机解码能力提示。',
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 字幕语言 ----------------
+          TdSection(
+            title: '字幕',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TDCell(
+                  title: '下载语言',
+                  description: settings.subtitleSummary,
+                  arrow: true,
+                  onClick: (cell) => _pickSubtitleLanguages(context, settings),
+                ),
+                const SizedBox(height: TdSpacer.small),
+                Text('AI 字幕：${settings.aiSubtitleStrategy.label}',
+                    style: TdText.bodyMedium),
+                const SizedBox(height: TdSpacer.xs),
+                TdChoiceGroup<AiSubtitleStrategy>(
+                  items: AiSubtitleStrategy.values,
+                  selected: settings.aiSubtitleStrategy,
+                  labelBuilder: (value) => value.label,
+                  onSelect: (value) => settings
+                      .update(() => settings.aiSubtitleStrategy = value),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 合并方式 ----------------
+          TdSection(
+            title: '合并方式',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TdChoiceGroup<MuxEngine>(
+                  items: MuxEngine.values,
+                  selected: settings.muxEngine,
+                  labelBuilder: (value) => value.label,
+                  onSelect: (value) =>
+                      settings.update(() => settings.muxEngine = value),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  settings.muxEngine.description,
+                  style: TdText.bodySmall
+                      .copyWith(color: TdPalette.textPlaceholder),
+                ),
+                const SizedBox(height: TdSpacer.small),
+                TdSwitchRow(
+                  title: '写入标题与封面',
+                  description: '合并后把标题 / UP 主 / 封面嵌入成品（FFmpeg，'
+                      '部分机型对杜比视界片源可能不兼容，出问题请关闭）',
+                  value: settings.embedMetadata,
+                  onChanged: (value) =>
+                      settings.update(() => settings.embedMetadata = value),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 弹幕样式 ----------------
+          TdSection(
+            title: '弹幕样式',
+            child: Column(
+              children: <Widget>[
+                TDCell(
+                  title: 'ASS 样式',
+                  description: settings.danmakuStyle.summary,
+                  arrow: true,
+                  onClick: (cell) => _editDanmakuStyle(context, settings),
+                ),
               ],
             ),
           ),
@@ -337,6 +496,35 @@ class SettingsPage extends StatelessWidget {
                   value: settings.downloadSubtitle,
                   onChanged: (value) =>
                       settings.update(() => settings.downloadSubtitle = value),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TdSpacer.small),
+
+          // ---------------- 下载归档 ----------------
+          TdSection(
+            title: '下载归档',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TdSwitchRow(
+                  title: '跳过已下载过的视频',
+                  description: '按 BV / 分P / 清晰度 / 编码判定；追更时不会重复下载旧视频',
+                  value: settings.archiveEnabled,
+                  onChanged: (value) =>
+                      settings.update(() => settings.archiveEnabled = value),
+                ),
+                TDCell(
+                  title: '清除归档记录',
+                  description: '清除后允许重新下载以前下过的视频',
+                  arrow: true,
+                  onClick: (cell) async {
+                    final count = await DownloadArchive.instance.clear();
+                    if (context.mounted) {
+                      tdToast(context, '已清除 $count 条归档记录');
+                    }
+                  },
                 ),
               ],
             ),
@@ -459,6 +647,198 @@ class SettingsPage extends StatelessWidget {
   }
 
   /// 通用文本编辑弹窗
+  /// 字幕语言多选。
+  ///
+  /// 用「选语言」而不是「选一条字幕」：用户关心的是「我要中英双语」，
+  /// 而具体挑哪条（人工 CC 还是 AI 字幕）是 SubtitleLanguage.select 的事。
+  Future<void> _pickSubtitleLanguages(
+    BuildContext context,
+    SettingsStore settings,
+  ) async {
+    final selected = <String>{...settings.subtitleLanguages};
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      // 官方弹层：标题与关闭按钮交给面板表头
+      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+        title: '下载哪些语言的字幕',
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final language in SubtitleLanguage.all)
+                TdCheckRow(
+                  title: language.label,
+                  value: selected.contains(language.code),
+                  onChanged: (value) => setSheetState(() {
+                    if (value) {
+                      selected.add(language.code);
+                    } else {
+                      selected.remove(language.code);
+                    }
+                  }),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(TdSpacer.medium),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(true),
+                      child: const Text('确定'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await settings.update(() {
+      settings.subtitleLanguages = selected.toList();
+      // 选了语言等于要下字幕，顺手把开关打开，少一步操作
+      settings.downloadSubtitle = selected.isNotEmpty;
+    });
+  }
+
+  /// 弹幕 ASS 样式。
+  ///
+  /// 之前字号 / 时长 / 占屏比例全是写死的，手机上 40 号字偏小、4K 片源里又铺满整屏。
+  /// 现在这几项都能调，并且实时给出摘要。
+  Future<void> _editDanmakuStyle(
+    BuildContext context,
+    SettingsStore settings,
+  ) async {
+    var style = settings.danmakuStyle;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      // 官方弹层：标题与关闭按钮交给面板表头
+      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+        title: '弹幕 ASS 样式',
+        child: StatefulBuilder(
+          builder: (sheetContext, setSheetState) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _styleGroup<double>(
+                  '字号',
+                  const <double>[0.6, 0.8, 1.0, 1.2, 1.5],
+                  style.fontScale,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(fontScale: value)),
+                  (value) => '${(value * 100).round()}%',
+                ),
+                _styleGroup<double>(
+                  '不透明度',
+                  const <double>[0.5, 0.7, 0.85, 1.0],
+                  style.opacity,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(opacity: value)),
+                  (value) => '${(value * 100).round()}%',
+                ),
+                _styleGroup<int>(
+                  '滚动时长',
+                  const <int>[4000, 6000, 8000, 12000],
+                  style.scrollDurationMs,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(scrollDurationMs: value)),
+                  (value) => '${value ~/ 1000} 秒',
+                ),
+                _styleGroup<double>(
+                  '占屏比例',
+                  const <double>[0.4, 0.55, 0.75, 1.0],
+                  style.laneRatio,
+                  (value) => setSheetState(
+                      () => style = style.copyWith(laneRatio: value)),
+                  (value) => '${(value * 100).round()}%',
+                ),
+                TdSwitchRow(
+                  title: '滚动弹幕',
+                  value: style.enableScroll,
+                  onChanged: (value) => setSheetState(
+                      () => style = style.copyWith(enableScroll: value)),
+                ),
+                TdSwitchRow(
+                  title: '顶部弹幕',
+                  value: style.enableTop,
+                  onChanged: (value) => setSheetState(
+                      () => style = style.copyWith(enableTop: value)),
+                ),
+                TdSwitchRow(
+                  title: '底部弹幕',
+                  value: style.enableBottom,
+                  onChanged: (value) => setSheetState(
+                      () => style = style.copyWith(enableBottom: value)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(TdSpacer.medium),
+                  child: Text(
+                    style.summary,
+                    style: TdText.bodySmall
+                        .copyWith(color: TdPalette.textPlaceholder),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      TdSpacer.medium, 0, TdSpacer.medium, TdSpacer.medium),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      TextButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('取消'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(true),
+                        child: const Text('确定'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await settings.update(() => settings.danmakuStyle = style);
+  }
+
+  Widget _styleGroup<T>(
+    String title,
+    List<T> items,
+    T selected,
+    ValueChanged<T> onSelect,
+    String Function(T value) label,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: TdText.titleSmall),
+          const SizedBox(height: TdSpacer.xs),
+          TdChoiceGroup<T>(
+            items: items,
+            selected: selected,
+            labelBuilder: label,
+            onSelect: onSelect,
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _editText(
     BuildContext context, {
     required String title,
@@ -468,26 +848,25 @@ class SettingsPage extends StatelessWidget {
     bool obscure = false,
   }) async {
     final controller = TextEditingController(text: initial);
+    // 用 TDesign 的对话框 + 输入框，而不是 Material 的 AlertDialog + TextField
     final value = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text(title, style: TdText.titleSmall),
-        content: TextField(
+      builder: (dialogContext) => TDAlertDialog(
+        title: title,
+        contentWidget: TDInput(
           controller: controller,
           obscureText: obscure,
-          decoration: InputDecoration(hintText: hint),
+          hintText: hint,
+          backgroundColor: TdPalette.gray1,
         ),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消')),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
+        leftBtn: TDDialogButtonOptions(
+          title: '取消',
+          action: () => Navigator.of(dialogContext).pop(),
+        ),
+        rightBtn: TDDialogButtonOptions(
+          title: '保存',
+          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+        ),
       ),
     );
     if (value == null) return;
@@ -520,10 +899,9 @@ class SettingsPage extends StatelessWidget {
     final lines = AppLog.lines;
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text('运行日志', style: TdText.titleSmall),
-        content: SizedBox(
+      builder: (dialogContext) => TDConfirmDialog(
+        title: '运行日志',
+        contentWidget: SizedBox(
           width: double.maxFinite,
           height: 360,
           child: lines.isEmpty
@@ -536,11 +914,8 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
         ),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('关闭')),
-        ],
+        buttonText: '关闭',
+        action: () => Navigator.of(dialogContext).pop(),
       ),
     );
   }
@@ -560,40 +935,34 @@ class _ThemeSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Row(
-        children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(TdRadius.medium),
-            child: SizedBox(
-              width: 46,
-              height: 46,
-              child: Row(
-                children: <Widget>[
-                  for (final color in style.preview)
-                    Expanded(child: ColoredBox(color: color)),
-                ],
-              ),
-            ),
+    // 官方 TDCell：色板预览走 leftIconWidget，箭头用组件自带的 arrow
+    return TDCell(
+      title: style.label,
+      description: followSystem ? '跟随系统深色模式' : '固定主题，不跟随系统',
+      leftIconWidget: ClipRRect(
+        borderRadius: BorderRadius.circular(TdRadius.medium),
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Row(
+            children: <Widget>[
+              for (final color in style.preview)
+                Expanded(child: ColoredBox(color: color)),
+            ],
           ),
-          const SizedBox(width: TdSpacer.small),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(style.label, style: TdText.bodyLarge),
-                const SizedBox(height: 2),
-                Text(
-                  followSystem ? '跟随系统深色模式' : '固定主题，不跟随系统',
-                  style: TdText.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right, size: 22, color: TdPalette.gray6),
-        ],
+        ),
       ),
+      arrow: true,
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
+        padding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyLarge,
+        descriptionStyle: TdText.bodySmall,
+      ),
+      onClick: (cell) => onTap(),
     );
   }
 }

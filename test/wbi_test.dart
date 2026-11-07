@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:downkyi/core/wbi.dart';
+import 'package:downkyi/bili/wbi.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// WBI 签名测试。

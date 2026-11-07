@@ -167,10 +167,9 @@ class MinePage extends StatelessWidget {
   void _showAbout(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: TdPalette.container,
-        title: Text(AppInfo.name, style: TdText.titleSmall),
-        content: Column(
+      builder: (dialogContext) => TDConfirmDialog(
+        title: AppInfo.name,
+        contentWidget: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -190,11 +189,8 @@ class MinePage extends StatelessWidget {
                     .copyWith(color: TdPalette.textPlaceholder)),
           ],
         ),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('知道了')),
-        ],
+        buttonText: '知道了',
+        action: () => Navigator.of(dialogContext).pop(),
       ),
     );
   }
@@ -209,29 +205,14 @@ class _ThemeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = context.watch<SettingsStore>().themeStyle;
-    return InkWell(
+    // 这是个按钮，不是行——所以用官方 TDButton（浅色主题），
+    // 圆角、内边距、按下反馈都交给组件库
+    return TDButton(
+      text: style.label,
+      icon: Icons.palette_outlined,
+      theme: TDButtonTheme.light,
+      size: TDButtonSize.small,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(TdRadius.round),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: TdPalette.brandLight,
-          borderRadius: BorderRadius.circular(TdRadius.round),
-          border: Border.all(color: TdPalette.brand, width: 0.5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(Icons.palette_outlined, size: 16, color: TdPalette.brand),
-            const SizedBox(width: 4),
-            Text(
-              style.label,
-              style:
-                  TextStyle(fontSize: 12, color: TdPalette.brand, height: 1.3),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

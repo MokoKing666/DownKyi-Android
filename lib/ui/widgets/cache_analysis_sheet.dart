@@ -22,12 +22,12 @@ Future<int?> showCacheAnalysisSheet(
     tdToast(context, '工作目录是空的，没有可清理的内容');
     return null;
   }
-  return showModalBottomSheet<int>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (_) => _CacheAnalysisSheet(manager: manager, groups: groups),
-  );
+  // 官方弹层：面板骨架（圆角、拖拽、关闭按钮、高度约束）交给 TDesign
+  return Navigator.of(context).push<int>(TDSlidePopupRoute<int>(
+    builder: (_) => TDPopupBottomDisplayPanel(
+      child: _CacheAnalysisSheet(manager: manager, groups: groups),
+    ),
+  ));
 }
 
 class _CacheAnalysisSheet extends StatefulWidget {
@@ -126,15 +126,8 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
         TdSpacer.medium,
         TdSpacer.small,
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(child: Text('缓存分析', style: TdText.titleSmall)),
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Icon(Icons.close, size: 20, color: TdPalette.gray6),
-          ),
-        ],
-      ),
+      // 关闭按钮交给官方弹层的表头，这里只保留标题
+      child: Text('缓存分析', style: TdText.titleSmall),
     );
   }
 
@@ -158,41 +151,27 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
 
   Widget _buildGroup(CacheGroup group) {
     final checked = _selected.contains(group.key);
-    return InkWell(
-      onTap: () => _toggle(group),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            TDCheckbox(
-              checked: checked,
-              size: TDCheckBoxSize.small,
-              insetSpacing: 0,
-              showDivider: false,
-              onCheckBoxChanged: (_) => _toggle(group),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                          child: Text(group.label, style: TdText.bodyMedium)),
-                      Text(
-                        '${group.fileCount} 个 · ${formatBytes(group.bytes)}',
-                        style: TdText.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  Text(group.description, style: TdText.bodySmall),
-                ],
-              ),
-            ),
-          ],
-        ),
+    // 官方 TDCell：右侧占用统计用 note 槽位，勾选框用 leftIconWidget 槽位
+    return TDCell(
+      title: group.label,
+      description: group.description,
+      note: '${group.fileCount} 个 · ${formatBytes(group.bytes)}',
+      noteMaxLine: 1,
+      leftIconWidget: TdCheckboxField(
+        checked: checked,
+        onChanged: (_) => _toggle(group),
       ),
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyMedium,
+        descriptionStyle: TdText.bodySmall,
+        noteStyle: TdText.bodyMedium,
+      ),
+      onClick: (cell) => _toggle(group),
     );
   }
 

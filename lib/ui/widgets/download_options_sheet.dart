@@ -21,14 +21,15 @@ Future<bool> showDownloadOptionsSheet(
   required bool referenceLoaded,
 }) async {
   final parse = context.read<ParseController>();
-  final confirmed = await showModalBottomSheet<bool>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (_) => _DownloadOptionsSheet(
-      parse: parse,
-      count: count,
-      referenceLoaded: referenceLoaded,
+  final confirmed = await Navigator.of(context).push<bool>(
+    TDSlidePopupRoute<bool>(
+      builder: (_) => TDPopupBottomDisplayPanel(
+        child: _DownloadOptionsSheet(
+          parse: parse,
+          count: count,
+          referenceLoaded: referenceLoaded,
+        ),
+      ),
     ),
   );
   return confirmed ?? false;
@@ -128,15 +129,12 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
         TdSpacer.medium,
         TdSpacer.small,
       ),
+      // 关闭按钮不再自绘：外层已是官方弹层面板，表头自带关闭按钮，
+      // 点它会以「取消」语义返回（调用方按 null => false 处理）
       child: Row(
         children: <Widget>[
           Expanded(child: Text('下载设置', style: TdText.titleSmall)),
           Text('已选 ${widget.count} 个视频', style: TdText.bodySmall),
-          const SizedBox(width: TdSpacer.xs),
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(false),
-            child: Icon(Icons.close, size: 20, color: TdPalette.gray6),
-          ),
         ],
       ),
     );

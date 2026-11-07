@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/formatter.dart';
 import '../td.dart';
@@ -40,11 +41,10 @@ class VideoCover extends StatelessWidget {
                 loadingBuilder: (context, child, progress) {
                   if (progress == null) return child;
                   return Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: TdPalette.brand),
+                    child: TDLoading(
+                      size: TDLoadingSize.small,
+                      icon: TDLoadingIcon.circle,
+                      iconColor: TdPalette.brand,
                     ),
                   );
                 },
@@ -53,17 +53,14 @@ class VideoCover extends StatelessWidget {
               Positioned(
                 right: 4,
                 bottom: 4,
-                child: Container(
+                // 时长角标用官方 TDTag，配色仍按封面上的深色底来给
+                child: TDTag(
+                  formatDuration(durationMs),
+                  size: TDTagSize.small,
+                  textColor: Colors.white,
+                  backgroundColor: Colors.black.withValues(alpha: 0.6),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(TdRadius.small),
-                  ),
-                  child: Text(
-                    formatDuration(durationMs),
-                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                  ),
                 ),
               ),
           ],
@@ -96,47 +93,32 @@ class VideoInfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (leading != null) ...<Widget>[
-              leading!,
-              const SizedBox(width: TdSpacer.small),
-            ],
-            VideoCover(url: cover, durationMs: durationMs),
+    // 官方 TDCell：封面（含左侧勾选框）走 leftIconWidget，尾部控件走 rightIconWidget，
+    // 内边距与底色保持原值，版式不变
+    return TDCell(
+      title: title,
+      description: subtitle,
+      leftIconWidget: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (leading != null) ...<Widget>[
+            leading!,
             const SizedBox(width: TdSpacer.small),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    title,
-                    style: TdText.bodyMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  if (subtitle != null && subtitle!.isNotEmpty)
-                    Text(
-                      subtitle!,
-                      style: TdText.bodySmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
-            ),
-            if (trailing != null) ...<Widget>[
-              const SizedBox(width: TdSpacer.xs),
-              trailing!,
-            ],
           ],
-        ),
+          VideoCover(url: cover, durationMs: durationMs),
+        ],
       ),
+      rightIconWidget: trailing,
+      hover: false,
+      bordered: false,
+      style: TDCellStyle(
+        context: context,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        backgroundColor: Colors.transparent,
+        titleStyle: TdText.bodyMedium,
+        descriptionStyle: TdText.bodySmall,
+      ),
+      onClick: onTap == null ? null : (cell) => onTap!(),
     );
   }
 }

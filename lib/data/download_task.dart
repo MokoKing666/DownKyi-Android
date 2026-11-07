@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../core/constants.dart';
 
 /// 任务状态
@@ -64,6 +66,16 @@ class DownloadTask {
     this.exported = false,
     this.exportedPath,
     this.extrasError,
+    this.subtitleLanguages = '',
+    this.aiSubtitleStrategy = '',
+    this.danmakuStyleJson = '',
+    this.muxEngine = '',
+    this.embedMetadata,
+    this.mergeAv,
+    this.saveToGallery,
+    this.engine = '',
+    this.aria2Dir = '',
+    this.aria2GidsJson = '',
   });
 
   int id;
@@ -103,8 +115,56 @@ class DownloadTask {
   int finishedAt;
   bool merged;
 
-  /// 使用 Aria2 引擎时的任务 gid（用于轮询进度 / 暂停 / 删除）
+  /// 使用 Aria2 引擎时的任务 gid（用于轮询进度 / 暂停 / 删除）。
+  ///
+  /// 兼容字段：v2.2 之前只存这一个 gid，而且是**最后一个流**的
+  /// （video+audio 时最终留下 audio）。新代码请读写 [aria2GidsJson]，
+  /// 这个字段只作为「首个 gid」的快速访问保留。
   String? aria2Gid;
+
+  // ------------------------------------------------------------------
+  // 参数快照（v2.2 起）
+  //
+  // 背景：过去这些值都在**执行时**实时读全局设置，于是「任务入队后改了
+  // 全局设置」会影响已经在跑的任务——最典型的是 subtitleLanguages
+  // 进了 Task Key 却在执行时重读，key 与实际产物对不上。
+  //
+  // 兼容规则：空串 / null 表示「旧任务，没有快照」，执行时回退到全局设置，
+  // 与旧行为完全一致；新任务一律带快照。
+  // ------------------------------------------------------------------
+
+  /// 字幕语言（'+' 连接）
+  String subtitleLanguages;
+
+  /// AI 字幕策略名（preferHuman / excludeAi / onlyAi）
+  String aiSubtitleStrategy;
+
+  /// 弹幕 ASS 样式 JSON
+  String danmakuStyleJson;
+
+  /// 合并引擎名（system / ffmpeg）
+  String muxEngine;
+
+  /// 合并后是否注入元数据与封面
+  bool? embedMetadata;
+
+  /// 是否自动合并音视频
+  bool? mergeAv;
+
+  /// 是否保存到系统相册
+  bool? saveToGallery;
+
+  /// 执行引擎快照：'builtin' | 'aria2'。
+  /// 重启恢复、暂停、继续都按它来，跟随后改的全局引擎设置。
+  String engine;
+
+  /// aria2 落盘目录快照（下发给远端 dir 的参数）
+  String aria2Dir;
+
+  /// aria2 任务的全部 gid：`{"direct":"...","video":"...","audio":"..."}` 的 JSON。
+  /// 之前只持久化单个 gid（还是最后一个流的），导致重启后无法区分
+  /// 视频 / 音频各自的远端状态。
+  String aria2GidsJson;
 
   /// 是否已导出到系统相册
   bool exported;
@@ -132,6 +192,32 @@ class DownloadTask {
   bool get wantDanmaku =>
       flags & DownloadFlags.danmaku != 0 && danmakuFormat != DanmakuFormat.none;
   bool get wantSubtitle => flags & DownloadFlags.subtitle != 0;
+
+  /// aria2 的「流名 -> gid」映射（空 map 表示没有）
+  Map<String, String> get aria2Gids {
+    if (aria2GidsJson.isEmpty) return const <String, String>{};
+    try {
+      final decoded = jsonDecode(aria2GidsJson);
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry('$key', '$value'));
+      }
+    } catch (_) {
+      // 数据损坏按没有处理，别让任务起不来
+    }
+    return const <String, String>{};
+  }
+
+  set aria2Gids(Map<String, String> value) {
+    aria2GidsJson = value.isEmpty ? '' : jsonEncode(value);
+  }
+
+  /// 是否带有 v2.2 的参数快照（旧任务没有，执行时回退全局设置）
+  bool get hasSnapshot => engine.isNotEmpty;
+
+  /// 快照里的字幕语言列表
+  List<String> get snapshotSubtitleLanguages => subtitleLanguages.isEmpty
+      ? const <String>[]
+      : subtitleLanguages.split('+').where((item) => item.isNotEmpty).toList();
 
   bool get isFinished => status == TaskStatus.completed;
   bool get isActive =>
@@ -197,6 +283,18 @@ class DownloadTask {
         'exported': exported ? 1 : 0,
         'exported_path': exportedPath,
         'extras_error': extrasError,
+        'subtitle_languages': subtitleLanguages,
+        'ai_subtitle_strategy': aiSubtitleStrategy,
+        'danmaku_style_json': danmakuStyleJson,
+        'mux_engine': muxEngine,
+        'embed_metadata':
+            embedMetadata == null ? null : (embedMetadata! ? 1 : 0),
+        'merge_av': mergeAv == null ? null : (mergeAv! ? 1 : 0),
+        'save_to_gallery':
+            saveToGallery == null ? null : (saveToGallery! ? 1 : 0),
+        'engine': engine,
+        'aria2_dir': aria2Dir,
+        'aria2_gids': aria2GidsJson,
       };
 
   factory DownloadTask.fromMap(Map<String, Object?> map) => DownloadTask(
@@ -237,5 +335,22 @@ class DownloadTask {
         exported: ((map['exported'] as int?) ?? 0) == 1,
         exportedPath: map['exported_path'] as String?,
         extrasError: map['extras_error'] as String?,
+        subtitleLanguages: (map['subtitle_languages'] as String?) ?? '',
+        aiSubtitleStrategy: (map['ai_subtitle_strategy'] as String?) ?? '',
+        danmakuStyleJson: (map['danmaku_style_json'] as String?) ?? '',
+        muxEngine: (map['mux_engine'] as String?) ?? '',
+        embedMetadata: _intToBool(map['embed_metadata']),
+        mergeAv: _intToBool(map['merge_av']),
+        saveToGallery: _intToBool(map['save_to_gallery']),
+        engine: (map['engine'] as String?) ?? '',
+        aria2Dir: (map['aria2_dir'] as String?) ?? '',
+        aria2GidsJson: (map['aria2_gids'] as String?) ?? '',
       );
+
+  static bool? _intToBool(Object? value) {
+    if (value == null) return null;
+    if (value is int) return value == 1;
+    if (value is bool) return value;
+    return null;
+  }
 }

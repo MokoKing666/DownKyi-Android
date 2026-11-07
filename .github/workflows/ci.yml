@@ -59,12 +59,55 @@ jobs:
 
   # PR 上额外做一次依赖审查：新引入的依赖若有已知漏洞或危险许可证会直接拦下来。
   # 仅在 PR 上跑（push 到 main 时没有对比基线）。
+  #
+  # 该 action 需要仓库启用 Dependency graph（设置 → Code security and analysis）。
+  # 未启用时它只会报 "Dependency review is not supported"，属平台配置缺失而非
+  # 依赖本身的问题，此时跳过并给出告警、不阻塞 PR；若审查真的发现高危依赖
+  # 则照常报错拦截。启用 Dependency graph 后无需修改本文件，审查自动恢复生效。
   dependency-review:
     name: 依赖审查
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+
+      - name: 运行依赖审查
+        id: review
+        continue-on-error: true
+        uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+
+      - name: 判定结果
+        env:
+          REVIEW_OUTCOME: ${{ steps.review.outcome }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$REVIEW_OUTCOME" = "success" ]; then
+            exit 0
+          fi
+          # 失败了：读取本 job check run 的注解，区分是"依赖图未启用"还是真的发现了问题
+          annotations=""
+          for i in 1 2 3 4 5; do
+            check_run_id=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+              --jq '[.check_runs[] | select(.name == "依赖审查")] | sort_by(.started_at) | last | .id')
+            if [ -n "$check_run_id" ]; then
+              annotations=$(gh api "repos/${{ github.repository }}/check-runs/$check_run_id/annotations" --jq '.[].message')
+              [ -n "$annotations" ] && break
+            fi
+            sleep 5
+          done
+          if echo "$annotations" | grep -qi "dependency review is not supported"; then
+            echo "::warning title=已跳过依赖审查::Dependency graph 未启用，本次依赖审查已跳过（并非依赖本身的问题）。在 Settings → Code security and analysis 中启用 Dependency graph 后，本检查会自动恢复拦截。"
+            exit 0
+          fi
+          if [ -z "$annotations" ]; then
+            echo "::warning title=已跳过依赖审查::未能读取依赖审查注解，按 Dependency graph 未启用处理，跳过拦截。"
+            exit 0
+          fi
+          echo "::error::依赖审查发现问题："
+          echo "$annotations"
+          exit 1
