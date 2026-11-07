@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/formatter.dart';
@@ -40,12 +39,8 @@ class VideoCover extends StatelessWidget {
                 ),
                 loadingBuilder: (context, child, progress) {
                   if (progress == null) return child;
-                  return Center(
-                    child: TDLoading(
-                      size: TDLoadingSize.small,
-                      icon: TDLoadingIcon.circle,
-                      iconColor: TdPalette.brand,
-                    ),
+                  return const Center(
+                    child: const TLoading(size: 16, icon: TLoadingIcon.circle),
                   );
                 },
               ),
@@ -53,14 +48,18 @@ class VideoCover extends StatelessWidget {
               Positioned(
                 right: 4,
                 bottom: 4,
-                // 时长角标用官方 TDTag，配色仍按封面上的深色底来给
-                child: TDTag(
-                  formatDuration(durationMs),
-                  size: TDTagSize.small,
-                  textColor: Colors.white,
-                  backgroundColor: Colors.black.withValues(alpha: 0.6),
+                // 时长角标需要白字深底（1.x 的 TTag 不支持自定义配色，这里自绘）
+                child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(TdRadius.small),
+                  ),
+                  child: Text(
+                    formatDuration(durationMs),
+                    style: const TextStyle(fontSize: 11, color: Colors.white),
+                  ),
                 ),
               ),
           ],
@@ -93,12 +92,12 @@ class VideoInfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 官方 TDCell：封面（含左侧勾选框）走 leftIconWidget，尾部控件走 rightIconWidget，
-    // 内边距与底色保持原值，版式不变
-    return TDCell(
-      title: title,
-      description: subtitle,
-      leftIconWidget: Row(
+    // 官方 TCell：封面（含左侧勾选框）走 prefix，尾部控件走 trailing
+    return TCell(
+      title: Text(title, style: TdText.bodyMedium),
+      subtitle:
+          subtitle == null ? null : Text(subtitle!, style: TdText.bodySmall),
+      prefix: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (leading != null) ...<Widget>[
@@ -108,17 +107,8 @@ class VideoInfoTile extends StatelessWidget {
           VideoCover(url: cover, durationMs: durationMs),
         ],
       ),
-      rightIconWidget: trailing,
-      hover: false,
-      bordered: false,
-      style: TDCellStyle(
-        context: context,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        backgroundColor: Colors.transparent,
-        titleStyle: TdText.bodyMedium,
-        descriptionStyle: TdText.bodySmall,
-      ),
-      onClick: onTap == null ? null : (cell) => onTap!(),
+      trailing: trailing,
+      onTap: onTap,
     );
   }
 }

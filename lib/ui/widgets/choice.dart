@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../td.dart';
@@ -53,33 +52,19 @@ class _ChoiceItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 用官方 TDSelectTag（内部就是 TDTag）而不是自绘容器。
-    // 选中 / 未选中两套样式通过 TDTagStyle 传入我们的主题令牌，
-    // 所以既统一到 TDesign，又不会丢掉哔哩哔哩粉的配色。
-    return TDSelectTag(
-      label,
-      isSelected: selected,
-      size: TDTagSize.small,
-      shape: TDTagShape.square,
-      fixedWidth: width,
-      padding:
-          const EdgeInsets.symmetric(horizontal: TdSpacer.small, vertical: 7),
-      selectStyle: TDTagStyle(
-        context: context,
-        textColor: TdPalette.brand,
-        backgroundColor: TdPalette.brandLight,
-        border: 1,
-        borderColor: TdPalette.brand,
-        borderRadius: BorderRadius.circular(TdRadius.medium),
+    // 用官方 TSelectTag（内部就是 TTag）而不是自绘容器。
+    // 1.x 的选择标签不再支持自定义样式，选中态配色走 primary 预设——
+    // 它引用的 brandColor 已被我们的主题映射成哔哩哔哩粉，配色不丢。
+    return SizedBox(
+      width: width,
+      child: TSelectTag(
+        label,
+        value: selected,
+        size: TTagSize.small,
+        shape: TTagShape.square,
+        colorPreset: TTagColorPreset.primary,
+        onChanged: (_) => onTap(),
       ),
-      unSelectStyle: TDTagStyle(
-        context: context,
-        textColor: TdPalette.textPrimary,
-        backgroundColor: TdPalette.gray1,
-        border: 0,
-        borderRadius: BorderRadius.circular(TdRadius.medium),
-      ),
-      onSelectChanged: (_) => onTap(),
     );
   }
 }

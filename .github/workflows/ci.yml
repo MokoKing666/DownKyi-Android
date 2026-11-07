@@ -37,16 +37,10 @@ jobs:
           channel: stable
           cache: true
 
-      # 拉依赖（此时还没有 pubspec_overrides.yaml，走的是官方 tdesign_flutter）
+      # tdesign_flutter 1.x 起不再需要本地补丁（IconData 问题已在上游修复），
+      # 直接用官方包；prepare_tdesign.ps1 仅对 0.2.x 构建还有意义
       - name: flutter pub get
         run: flutter pub get
-
-      # 生成 third_party/tdesign_flutter 并写入 pubspec_overrides.yaml，
-      # 让 tdesign_flutter 指向修补过的副本——脚本内部会再跑一次 pub get。
-      # 详见 tools/prepare_tdesign.ps1 头部说明。
-      - name: 准备修补过的 tdesign_flutter
-        shell: pwsh
-        run: ./tools/prepare_tdesign.ps1
 
       - name: dart format 检查
         run: dart format --output=none --set-exit-if-changed lib test

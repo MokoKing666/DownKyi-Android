@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -139,22 +138,19 @@ class _SearchPageState extends State<SearchPage> {
         children: <Widget>[
           Expanded(
             // 官方搜索框，替代自绘的容器 + TextField
-            child: TDSearchBar(
+            child: TSearchBar(
               controller: _controller,
-              placeHolder: '搜索视频 / UP 主投稿',
-              style: TDSearchStyle.square,
-              backgroundColor: TdPalette.gray1,
-              padding: EdgeInsets.zero,
+              hintText: '搜索视频 / UP 主投稿',
+              variant: TSearchBarVariant.square,
               onSubmitted: (_) => unawaited(_search()),
             ),
           ),
           const SizedBox(width: TdSpacer.small),
-          TDButton(
-            text: _loading ? '搜索中…' : '搜索',
-            theme: TDButtonTheme.primary,
-            size: TDButtonSize.medium,
-            disabled: _loading,
-            onTap: () => unawaited(_search()),
+          TButton(
+            child: Text(_loading ? '搜索中…' : '搜索'),
+            size: TButtonSize.medium,
+            colorPreset: TButtonColorPreset.primary,
+            onPressed: _loading ? null : () => unawaited(_search()),
           ),
         ],
       ),
@@ -164,8 +160,7 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildBody() {
     if (_loading) {
       return const Center(
-        child:
-            TDLoading(size: TDLoadingSize.medium, icon: TDLoadingIcon.circle),
+        child: TLoading(size: 20, icon: TLoadingIcon.circle),
       );
     }
     final error = _error;
@@ -189,11 +184,11 @@ class _SearchPageState extends State<SearchPage> {
             child: Center(
               child: _loadingMore
                   ? const TdLoadingView(text: '加载更多')
-                  : TDButton(
-                      text: '加载更多',
-                      theme: TDButtonTheme.light,
-                      size: TDButtonSize.small,
-                      onTap: () => unawaited(_search(more: true)),
+                  : TButton(
+                      child: const Text('加载更多'),
+                      colorPreset: TButtonColorPreset.light,
+                      size: TButtonSize.small,
+                      onPressed: () => unawaited(_search(more: true)),
                     ),
             ),
           );

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import 'theme.dart';
@@ -117,7 +116,7 @@ class TdPage extends StatelessWidget {
 
   final String title;
   final Widget child;
-  final List<TDNavBarItem>? actions;
+  final List<TNavBarItem>? actions;
   final bool showBack;
   final bool showDivider;
   final Color? backgroundColor;
@@ -134,18 +133,16 @@ class TdPage extends StatelessWidget {
               bottom: false,
               child: Column(
                 children: <Widget>[
-                  TDNavBar(
-                    title: title,
-                    titleColor: TdPalette.textPrimary,
-                    backgroundColor: TdPalette.navBackground,
+                  TNavBar(
+                    title: Text(title, style: TdText.titleSmall),
                     useDefaultBack: showBack,
                     onBack: showBack
                         ? () => Navigator.of(context).maybePop()
                         : null,
-                    rightBarItems: actions,
+                    actions: actions,
                   ),
                   if (showDivider)
-                    TDDivider(height: 0.5, color: TdPalette.divider),
+                    Divider(height: 0.5, color: TdPalette.divider),
                 ],
               ),
             ),
@@ -198,7 +195,7 @@ class TdSection extends StatelessWidget {
   }
 }
 
-/// 开关行（标题 + 说明 + TDSwitch）
+/// 开关行（标题 + 说明 + TSwitch）
 class TdSwitchRow extends StatelessWidget {
   const TdSwitchRow({
     super.key,
@@ -237,32 +234,23 @@ class TdSwitchRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: TdSpacer.small),
-              TDSwitch(
-                isOn: value,
-                onChanged: (checked) {
-                  onChanged(checked);
-                  return true;
-                },
+              TSwitch(
+                value: value,
+                onChanged: onChanged,
               ),
             ],
           ),
         ),
-        if (showDivider) TDDivider(height: 0.5, color: TdPalette.divider),
+        if (showDivider) Divider(height: 0.5, color: TdPalette.divider),
       ],
     );
   }
 }
 
-/// 官方 `TDCheckbox` 的统一入口。
+/// 官方 `TCheckbox` 的统一入口。
 ///
-/// 唯一的存在理由是 [TDCheckbox.backgroundColor]：tdesign_flutter 0.2.7 的
-/// `TDCheckbox` 会给外层 `Container` **无条件**填上 `bgColorContainer`
-/// （见 `td_check_box.dart` L418-421，连 `cardMode` 都不判断）。
-/// 于是勾选框在「卡片底色之外」的任何背景上都会露出一块自己的色块——
-/// 暗色模式下尤其扎眼，用户反馈为「圆圈外面还有方框」。
-///
-/// 传 `Colors.transparent` 即可消除，这是组件自己支持的参数，
-/// 不需要自绘、也不需要改包。这里统一封装一次，避免以后新增页面时漏掉。
+/// 1.x 的 TCheckbox 不再无条件垫底色块，暗色模式下的
+/// 「圆圈外面多出一块方框」问题随组件重写消失，这里只做参数收口。
 class TdCheckboxField extends StatelessWidget {
   const TdCheckboxField({
     super.key,
@@ -281,17 +269,14 @@ class TdCheckboxField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TDCheckbox(
-      checked: checked,
-      size: TDCheckBoxSize.small,
-      insetSpacing: 0,
+    return TCheckbox(
+      value: checked,
+      size: TCheckboxSize.small,
       showDivider: false,
-      // 关键：不传就会拿到 bgColorContainer，在暗色下就是那块方框
-      backgroundColor: Colors.transparent,
       title: title,
       subTitle: subTitle,
-      subTitleMaxLine: subTitleMaxLine,
-      onCheckBoxChanged: onChanged,
+      subTitleMaxLines: subTitleMaxLine,
+      onChanged: (value) => onChanged(value ?? false),
     );
   }
 }
@@ -313,28 +298,26 @@ class TdCheckRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 整行用官方 TDCell：hover 反馈、行内边距、标题/说明排版都交给组件库。
-    // padding 与底色保持我们原来的值，避免外层卡片出现二次留白。
-    return TDCell(
-      title: title,
-      description: description,
-      leftIconWidget: TdCheckboxField(checked: value, onChanged: onChanged),
-      hover: false,
-      bordered: false,
-      style: TDCellStyle(
-        context: context,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        backgroundColor: Colors.transparent,
-        titleStyle: TdText.bodyMedium,
-        descriptionStyle:
-            TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
-      ),
-      onClick: (cell) => onChanged(!value),
+    // 整行用官方 TCell：hover 反馈、行内边距、标题/说明排版都交给组件库。
+    return TCell(
+      title: Text(title, style: TdText.bodyMedium),
+      subtitle: description == null
+          ? null
+          : Text(
+              description!,
+              style:
+                  TdText.bodySmall.copyWith(color: TdPalette.textPlaceholder),
+            ),
+      prefix: TdCheckboxField(checked: value, onChanged: onChanged),
+      onTap: () => onChanged(!value),
     );
   }
 }
 
-/// 小标签
+/// 小标签。
+///
+/// 1.x 的 TTag 不再支持直接覆盖任意文字/底色（只剩 colorPreset 配色），
+/// 而调用点需要自定义配色，因此这里用轻量容器自绘。
 class TdLabel extends StatelessWidget {
   const TdLabel(this.text, {super.key, this.color, this.background});
 
@@ -348,15 +331,20 @@ class TdLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 用官方 TDTag：它的 textColor / backgroundColor 支持直接覆盖，
-    // 所以既能统一到官方组件，又能保留调用点传进来的配色。
-    return TDTag(
-      text,
-      size: TDTagSize.small,
-      shape: TDTagShape.square,
-      textColor: color ?? TdPalette.brand,
-      backgroundColor: background ?? TdPalette.brandLight,
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: background ?? TdPalette.brandLight,
+        borderRadius: BorderRadius.circular(TdRadius.small),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          height: 1.3,
+          color: color ?? TdPalette.brand,
+        ),
+      ),
     );
   }
 }
@@ -381,13 +369,15 @@ class TdPrimaryAction extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: TdSpacer.medium, vertical: TdSpacer.small),
-      child: TDButton(
-        text: loading ? '处理中…' : text,
-        size: TDButtonSize.large,
-        theme: danger ? TDButtonTheme.danger : TDButtonTheme.primary,
-        isBlock: true,
-        disabled: loading || onTap == null,
-        onTap: onTap,
+      child: SizedBox(
+        width: double.infinity,
+        child: TButton(
+          size: TButtonSize.large,
+          colorPreset:
+              danger ? TButtonColorPreset.danger : TButtonColorPreset.primary,
+          onPressed: loading || onTap == null ? null : onTap,
+          child: Text(loading ? '处理中…' : text),
+        ),
       ),
     );
   }
@@ -405,11 +395,15 @@ class TdEmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: TDEmpty(
+      child: TEmpty(
         emptyText: text,
-        type: operationText == null ? TDEmptyType.plain : TDEmptyType.operation,
-        operationText: operationText,
-        onTapEvent: onTap,
+        operation: operationText == null
+            ? null
+            : TButton(
+                variant: TButtonVariant.outline,
+                onPressed: onTap,
+                child: Text(operationText!),
+              ),
       ),
     );
   }
@@ -426,8 +420,7 @@ class TdLoadingView extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(TdSpacer.large),
-        child: TDLoading(
-            size: TDLoadingSize.large, icon: TDLoadingIcon.circle, text: text),
+        child: TLoading(size: 24, icon: TLoadingIcon.circle, text: text),
       ),
     );
   }
@@ -435,7 +428,7 @@ class TdLoadingView extends StatelessWidget {
 
 /// 确认弹窗。
 ///
-/// 直接转发到官方 `TDAlertDialog`：按钮样式、圆角、遮罩、危险色
+/// 直接转发到官方 `TDialog`：按钮样式、圆角、遮罩、危险色
 /// 都由组件库按当前主题决定，我们不再自绘一套。
 Future<bool> tdConfirm(
   BuildContext context, {
@@ -445,20 +438,24 @@ Future<bool> tdConfirm(
   String cancelText = '取消',
   bool danger = false,
 }) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => TDAlertDialog(
-      title: title,
-      content: content,
-      leftBtn: TDDialogButtonOptions(
-        title: cancelText,
-        action: () => Navigator.of(dialogContext).pop(false),
-      ),
-      rightBtn: TDDialogButtonOptions(
-        title: confirmText,
-        theme: danger ? TDButtonTheme.danger : TDButtonTheme.primary,
-        action: () => Navigator.of(dialogContext).pop(true),
-      ),
+  final result = await TDialog.show<bool>(
+    context,
+    dialog: TDialog(
+      title: Text(title),
+      content: content == null ? null : Text(content),
+      actions: <TDialogAction>[
+        TDialogAction(
+          child: Text(cancelText),
+          result: false,
+        ),
+        TDialogAction(
+          child: Text(confirmText),
+          result: true,
+          role: danger
+              ? TDialogActionRole.destructive
+              : TDialogActionRole.primary,
+        ),
+      ],
     ),
   );
   return result ?? false;
@@ -466,21 +463,27 @@ Future<bool> tdConfirm(
 
 /// 轻提示
 void tdToast(BuildContext context, String message) {
-  TDToast.showText(message, context: context);
+  TToast.showText(message, context: context);
 }
 
 void tdToastSuccess(BuildContext context, String message) {
-  TDToast.showSuccess(message, context: context);
+  TToast.showSuccess(message, context: context);
 }
 
 void tdToastError(BuildContext context, String message) {
-  TDToast.showFail(message, context: context);
+  TToast.showFail(message, context: context);
 }
 
+/// 加载提示的实例 id（TToast 需要 id 才能定点关闭）
+String? _loadingToastId;
+
 void tdLoadingShow(BuildContext context, {String text = '请稍候'}) {
-  TDToast.showLoading(context: context, text: text);
+  _loadingToastId = TToast.showLoading(context: context, text: text);
 }
 
 void tdLoadingHide() {
-  TDToast.dismissLoading();
+  final id = _loadingToastId;
+  if (id == null) return;
+  _loadingToastId = null;
+  TToast.dismissToast(id);
 }

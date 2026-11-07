@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -28,37 +27,30 @@ class HomeShell extends StatelessWidget {
     return Scaffold(
       backgroundColor: TdPalette.pageBackground,
       body: IndexedStack(index: index, children: _pages),
-      bottomNavigationBar: TDBottomTabBar(
-        TDBottomTabBarBasicType.iconText,
-        currentIndex: index,
-        navigationTabs: <TDBottomTabBarTabConfig>[
+      bottomNavigationBar: TTabBar(
+        type: TTabBarType.iconText,
+        value: index,
+        onChanged: (next) => shell.select(next),
+        navigationTabs: <TTabBarItemConfig>[
           _tab(
             text: '解析',
             selected: Icons.cloud_download,
             unselected: Icons.cloud_download_outlined,
-            index: 0,
-            shell: shell,
           ),
           _tab(
             text: '下载',
             selected: Icons.download_done,
             unselected: Icons.download_outlined,
-            index: 1,
-            shell: shell,
           ),
           _tab(
             text: '工具',
             selected: Icons.widgets,
             unselected: Icons.widgets_outlined,
-            index: 2,
-            shell: shell,
           ),
           _tab(
             text: '我的',
             selected: Icons.person,
             unselected: Icons.person_outline,
-            index: 3,
-            shell: shell,
           ),
         ],
       ),
@@ -66,18 +58,15 @@ class HomeShell extends StatelessWidget {
   }
 
   /// 选中态用主题强调色（哔哩哔哩粉），未选中用中性色
-  static TDBottomTabBarTabConfig _tab({
+  static TTabBarItemConfig _tab({
     required String text,
     required IconData selected,
     required IconData unselected,
-    required int index,
-    required ShellController shell,
   }) {
-    return TDBottomTabBarTabConfig(
+    return TTabBarItemConfig(
       tabText: text,
       selectedIcon: Icon(selected, color: TdPalette.brand, size: 24),
       unselectedIcon: Icon(unselected, color: TdPalette.gray6, size: 24),
-      onTap: () => shell.select(index),
     );
   }
 }

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
@@ -67,13 +66,16 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 const SizedBox(height: TdSpacer.medium),
-                TDButton(
-                  text: login.qr == null ? '生成登录二维码' : '刷新二维码',
-                  theme: TDButtonTheme.primary,
-                  size: TDButtonSize.medium,
-                  isBlock: true,
-                  disabled: login.loading,
-                  onTap: () => context.read<LoginController>().startQrLogin(),
+                SizedBox(
+                  width: double.infinity,
+                  child: TButton(
+                    child: Text(login.qr == null ? '生成登录二维码' : '刷新二维码'),
+                    size: TButtonSize.medium,
+                    colorPreset: TButtonColorPreset.primary,
+                    onPressed: login.loading
+                        ? null
+                        : () => context.read<LoginController>().startQrLogin(),
+                  ),
                 ),
               ],
             ),
@@ -89,21 +91,22 @@ class _LoginPageState extends State<LoginPage> {
                   style: TdText.bodySmall,
                 ),
                 const SizedBox(height: TdSpacer.small),
-                TDTextarea(
+                TTextarea(
                   controller: _cookieController,
                   maxLines: 4,
                   minLines: 2,
                   hintText: 'SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx',
-                  backgroundColor: TdPalette.gray1,
                 ),
                 const SizedBox(height: TdSpacer.small),
-                TDButton(
-                  text: '使用 Cookie 登录',
-                  theme: TDButtonTheme.light,
-                  size: TDButtonSize.medium,
-                  isBlock: true,
-                  disabled: login.loading,
-                  onTap: () => _loginWithCookie(context),
+                SizedBox(
+                  width: double.infinity,
+                  child: TButton(
+                    child: const Text('使用 Cookie 登录'),
+                    size: TButtonSize.medium,
+                    colorPreset: TButtonColorPreset.light,
+                    onPressed:
+                        login.loading ? null : () => _loginWithCookie(context),
+                  ),
                 ),
               ],
             ),
@@ -163,12 +166,12 @@ class _LoginPageState extends State<LoginPage> {
               ],
             ),
           ),
-          TDButton(
-            text: '退出登录',
-            theme: TDButtonTheme.danger,
-            type: TDButtonType.text,
-            size: TDButtonSize.small,
-            onTap: () => _logout(context),
+          TButton(
+            child: const Text('退出登录'),
+            variant: TButtonVariant.text,
+            size: TButtonSize.small,
+            colorPreset: TButtonColorPreset.danger,
+            onPressed: () => _logout(context),
           ),
         ],
       ),

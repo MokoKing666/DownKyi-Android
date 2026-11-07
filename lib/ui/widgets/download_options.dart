@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
@@ -245,12 +244,12 @@ class DownloadOptionsPanel extends StatelessWidget {
               ),
             ),
             if (settings.saveLocation == SaveLocation.custom)
-              TDButton(
-                text: settings.downloadDir.isEmpty ? '设置目录' : '修改',
-                theme: TDButtonTheme.light,
-                type: TDButtonType.text,
-                size: TDButtonSize.extraSmall,
-                onTap: () => unawaited(_editCustomDir(context)),
+              TButton(
+                child: Text(settings.downloadDir.isEmpty ? '设置目录' : '修改'),
+                variant: TButtonVariant.text,
+                size: TButtonSize.extraSmall,
+                colorPreset: TButtonColorPreset.light,
+                onPressed: () => unawaited(_editCustomDir(context)),
               ),
           ],
         ),
@@ -330,26 +329,26 @@ class DownloadOptionsPanel extends StatelessWidget {
   Future<void> _editCustomDir(BuildContext context) async {
     final settings = parse.settings;
     final controller = TextEditingController(text: settings.downloadDir);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => TDAlertDialog(
-        title: '自定义下载目录',
-        contentWidget: TDInput(
+    final confirmed = await TDialog.show<bool>(
+      context,
+      dialog: TDialog(
+        title: const Text('自定义下载目录'),
+        content: TInput(
           controller: controller,
           hintText: '例如 /storage/emulated/0/Download/DownKyi',
-          backgroundColor: TdPalette.gray1,
         ),
-        leftBtn: TDDialogButtonOptions(
-          title: '取消',
-          action: () => Navigator.of(dialogContext).pop(),
-        ),
-        rightBtn: TDDialogButtonOptions(
-          title: '保存',
-          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-        ),
+        actions: <TDialogAction>[
+          const TDialogAction(child: Text('取消')),
+          const TDialogAction(
+            child: Text('保存'),
+            result: true,
+            role: TDialogActionRole.primary,
+          ),
+        ],
       ),
     );
-    if (value == null) return;
+    if (confirmed != true) return;
+    final value = controller.text.trim();
     _apply(
         () => unawaited(settings.update(() => settings.downloadDir = value)));
   }

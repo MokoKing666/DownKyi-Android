@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -107,14 +106,14 @@ class VideoDetailPage extends StatelessWidget {
                   style: TdText.bodySmall,
                 ),
               ),
-              TDButton(
-                text: parse.selectedPages.length == video.pages.length
+              TButton(
+                child: Text(parse.selectedPages.length == video.pages.length
                     ? '全不选'
-                    : '全选',
-                type: TDButtonType.text,
-                size: TDButtonSize.extraSmall,
-                theme: TDButtonTheme.primary,
-                onTap: () => parse.selectAllPages(
+                    : '全选'),
+                variant: TButtonVariant.text,
+                size: TButtonSize.extraSmall,
+                colorPreset: TButtonColorPreset.primary,
+                onPressed: () => parse.selectAllPages(
                     parse.selectedPages.length != video.pages.length),
               ),
             ],

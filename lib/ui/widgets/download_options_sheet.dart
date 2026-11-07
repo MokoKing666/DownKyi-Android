@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -21,18 +20,17 @@ Future<bool> showDownloadOptionsSheet(
   required bool referenceLoaded,
 }) async {
   final parse = context.read<ParseController>();
-  final confirmed = await Navigator.of(context).push<bool>(
-    TDSlidePopupRoute<bool>(
-      builder: (_) => TDPopupBottomDisplayPanel(
-        child: _DownloadOptionsSheet(
-          parse: parse,
-          count: count,
-          referenceLoaded: referenceLoaded,
-        ),
+  final handle = TPopup.show(
+    context,
+    options: TPopupOptions.bottom(
+      child: _DownloadOptionsSheet(
+        parse: parse,
+        count: count,
+        referenceLoaded: referenceLoaded,
       ),
     ),
   );
-  return confirmed ?? false;
+  return await handle.result as bool? ?? false;
 }
 
 class _DownloadOptionsSheet extends StatefulWidget {
@@ -106,13 +104,16 @@ class _DownloadOptionsSheetState extends State<_DownloadOptionsSheet> {
                 TdSpacer.medium,
                 TdSpacer.small,
               ),
-              child: TDButton(
-                text: '确认并创建 ${widget.count} 个任务',
-                theme: TDButtonTheme.primary,
-                size: TDButtonSize.large,
-                isBlock: true,
-                disabled: !canDownload,
-                onTap: () => Navigator.of(context).pop(true),
+              child: SizedBox(
+                width: double.infinity,
+                child: TButton(
+                  child: Text('确认并创建 ${widget.count} 个任务'),
+                  size: TButtonSize.large,
+                  colorPreset: TButtonColorPreset.primary,
+                  onPressed: !canDownload
+                      ? null
+                      : () => Navigator.of(context).pop(true),
+                ),
               ),
             ),
           ],

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -109,11 +108,11 @@ class SettingsPage extends StatelessWidget {
                   const SizedBox(height: TdSpacer.xs),
                   Row(
                     children: <Widget>[
-                      TDButton(
-                        text: '设置自定义目录',
-                        theme: TDButtonTheme.light,
-                        size: TDButtonSize.small,
-                        onTap: () => _editText(
+                      TButton(
+                        child: const Text('设置自定义目录'),
+                        colorPreset: TButtonColorPreset.light,
+                        size: TButtonSize.small,
+                        onPressed: () => _editText(
                           context,
                           title: '自定义下载目录',
                           hint: '例如 /storage/emulated/0/Download/DownKyi',
@@ -162,11 +161,11 @@ class SettingsPage extends StatelessWidget {
                 if (settings.downloadEngine ==
                     DownloadEngine.aria2) ...<Widget>[
                   const SizedBox(height: TdSpacer.small),
-                  TDCell(
-                    title: 'RPC 地址',
-                    description: settings.aria2RpcUrl,
+                  TCell(
+                    title: const Text('RPC 地址'),
+                    subtitle: Text(settings.aria2RpcUrl),
                     arrow: true,
-                    onClick: (cell) => _editText(
+                    onTap: () => _editText(
                       context,
                       title: 'aria2 RPC 地址',
                       hint: 'http://127.0.0.1:6800/jsonrpc',
@@ -178,11 +177,12 @@ class SettingsPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  TDCell(
-                    title: 'RPC 密钥',
-                    description: settings.aria2Secret.isEmpty ? '未设置' : '已设置',
+                  TCell(
+                    title: const Text('RPC 密钥'),
+                    subtitle:
+                        Text(settings.aria2Secret.isEmpty ? '未设置' : '已设置'),
                     arrow: true,
-                    onClick: (cell) => _editText(
+                    onTap: () => _editText(
                       context,
                       title: 'aria2 RPC 密钥（--rpc-secret）',
                       hint: '留空表示未启用',
@@ -192,13 +192,13 @@ class SettingsPage extends StatelessWidget {
                           settings.update(() => settings.aria2Secret = value),
                     ),
                   ),
-                  TDCell(
-                    title: '落盘目录',
-                    description: settings.aria2Dir.isEmpty
+                  TCell(
+                    title: const Text('落盘目录'),
+                    subtitle: Text(settings.aria2Dir.isEmpty
                         ? '使用 aria2 默认目录'
-                        : settings.aria2Dir,
+                        : settings.aria2Dir),
                     arrow: true,
-                    onClick: (cell) => _editText(
+                    onTap: () => _editText(
                       context,
                       title: 'aria2 落盘目录',
                       hint: 'aria2 所在设备上的路径，例如 /volume1/downloads',
@@ -221,11 +221,11 @@ class SettingsPage extends StatelessWidget {
                   const SizedBox(height: TdSpacer.xs),
                   Row(
                     children: <Widget>[
-                      TDButton(
-                        text: '测试连接',
-                        theme: TDButtonTheme.light,
-                        size: TDButtonSize.small,
-                        onTap: () => _testAria2(context, manager),
+                      TButton(
+                        child: const Text('测试连接'),
+                        colorPreset: TButtonColorPreset.light,
+                        size: TButtonSize.small,
+                        onPressed: () => _testAria2(context, manager),
                       ),
                     ],
                   ),
@@ -344,11 +344,11 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                TDCell(
-                  title: '下载语言',
-                  description: settings.subtitleSummary,
+                TCell(
+                  title: const Text('下载语言'),
+                  subtitle: Text(settings.subtitleSummary),
                   arrow: true,
-                  onClick: (cell) => _pickSubtitleLanguages(context, settings),
+                  onTap: () => _pickSubtitleLanguages(context, settings),
                 ),
                 const SizedBox(height: TdSpacer.small),
                 Text('AI 字幕：${settings.aiSubtitleStrategy.label}',
@@ -404,11 +404,11 @@ class SettingsPage extends StatelessWidget {
             title: '弹幕样式',
             child: Column(
               children: <Widget>[
-                TDCell(
-                  title: 'ASS 样式',
-                  description: settings.danmakuStyle.summary,
+                TCell(
+                  title: const Text('ASS 样式'),
+                  subtitle: Text(settings.danmakuStyle.summary),
                   arrow: true,
-                  onClick: (cell) => _editDanmakuStyle(context, settings),
+                  onTap: () => _editDanmakuStyle(context, settings),
                 ),
               ],
             ),
@@ -528,11 +528,11 @@ class SettingsPage extends StatelessWidget {
                   onChanged: (value) =>
                       settings.update(() => settings.archiveEnabled = value),
                 ),
-                TDCell(
-                  title: '清除归档记录',
-                  description: '清除后允许重新下载以前下过的视频',
+                TCell(
+                  title: const Text('清除归档记录'),
+                  subtitle: const Text('清除后允许重新下载以前下过的视频'),
                   arrow: true,
-                  onClick: (cell) async {
+                  onTap: () async {
                     final count = await DownloadArchive.instance.clear();
                     if (context.mounted) {
                       tdToast(context, '已清除 $count 条归档记录');
@@ -633,18 +633,18 @@ class SettingsPage extends StatelessWidget {
                 const SizedBox(height: TdSpacer.xs),
                 Row(
                   children: <Widget>[
-                    TDButton(
-                      text: '查看运行日志',
-                      theme: TDButtonTheme.light,
-                      size: TDButtonSize.small,
-                      onTap: () => _showLog(context),
+                    TButton(
+                      child: const Text('查看运行日志'),
+                      colorPreset: TButtonColorPreset.light,
+                      size: TButtonSize.small,
+                      onPressed: () => _showLog(context),
                     ),
                     const SizedBox(width: TdSpacer.xs),
-                    TDButton(
-                      text: '清空日志',
-                      type: TDButtonType.text,
-                      size: TDButtonSize.small,
-                      onTap: () {
+                    TButton(
+                      child: const Text('清空日志'),
+                      variant: TButtonVariant.text,
+                      size: TButtonSize.small,
+                      onPressed: () {
                         AppLog.clear();
                         tdToast(context, '日志已清空');
                       },
@@ -673,13 +673,14 @@ class SettingsPage extends StatelessWidget {
     SettingsStore settings,
   ) async {
     final selected = <String>{...settings.subtitleLanguages};
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      // 官方弹层：标题与关闭按钮交给面板表头
-      builder: (sheetContext) => TDPopupBottomDisplayPanel(
-        title: '下载哪些语言的字幕',
+    // 官方弹层：标题与关闭按钮交给面板表头
+    final handle = TPopup.show(
+      context,
+      options: TPopupOptions.bottom(
+        headerBuilder: (ctx, close) => TPopupHeader(
+          cancelButton: TextButton(onPressed: close, child: const Text('取消')),
+          title: const Text('下载哪些语言的字幕'),
+        ),
         child: StatefulBuilder(
           builder: (sheetContext, setSheetState) => Column(
             mainAxisSize: MainAxisSize.min,
@@ -717,6 +718,7 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
     );
+    final confirmed = await handle.result as bool?;
     if (confirmed != true) return;
     await settings.update(() {
       settings.subtitleLanguages = selected.toList();
@@ -734,13 +736,14 @@ class SettingsPage extends StatelessWidget {
     SettingsStore settings,
   ) async {
     var style = settings.danmakuStyle;
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      // 官方弹层：标题与关闭按钮交给面板表头
-      builder: (sheetContext) => TDPopupBottomDisplayPanel(
-        title: '弹幕 ASS 样式',
+    // 官方弹层：标题与关闭按钮交给面板表头
+    final handle = TPopup.show(
+      context,
+      options: TPopupOptions.bottom(
+        headerBuilder: (ctx, close) => TPopupHeader(
+          cancelButton: TextButton(onPressed: close, child: const Text('取消')),
+          title: const Text('弹幕 ASS 样式'),
+        ),
         child: StatefulBuilder(
           builder: (sheetContext, setSheetState) => SingleChildScrollView(
             child: Column(
@@ -827,6 +830,7 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
     );
+    final confirmed = await handle.result as bool?;
     if (confirmed != true) return;
     await settings.update(() => settings.danmakuStyle = style);
   }
@@ -866,28 +870,27 @@ class SettingsPage extends StatelessWidget {
   }) async {
     final controller = TextEditingController(text: initial);
     // 用 TDesign 的对话框 + 输入框，而不是 Material 的 AlertDialog + TextField
-    final value = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => TDAlertDialog(
-        title: title,
-        contentWidget: TDInput(
+    final confirmed = await TDialog.show<bool>(
+      context,
+      dialog: TDialog(
+        title: Text(title),
+        content: TInput(
           controller: controller,
           obscureText: obscure,
           hintText: hint,
-          backgroundColor: TdPalette.gray1,
         ),
-        leftBtn: TDDialogButtonOptions(
-          title: '取消',
-          action: () => Navigator.of(dialogContext).pop(),
-        ),
-        rightBtn: TDDialogButtonOptions(
-          title: '保存',
-          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-        ),
+        actions: <TDialogAction>[
+          const TDialogAction(child: Text('取消')),
+          const TDialogAction(
+            child: Text('保存'),
+            result: true,
+            role: TDialogActionRole.primary,
+          ),
+        ],
       ),
     );
-    if (value == null) return;
-    onSave(value);
+    if (confirmed != true) return;
+    onSave(controller.text.trim());
     if (context.mounted) tdToast(context, '已保存');
   }
 
@@ -914,9 +917,9 @@ class SettingsPage extends StatelessWidget {
 
   void _showLog(BuildContext context) {
     final lines = AppLog.lines;
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => TDConfirmDialog(
+    TDialog.show<bool>(
+      context,
+      dialog: TConfirmDialog(
         title: '运行日志',
         contentWidget: SizedBox(
           width: double.maxFinite,
@@ -932,7 +935,6 @@ class SettingsPage extends StatelessWidget {
                 ),
         ),
         buttonText: '关闭',
-        action: () => Navigator.of(dialogContext).pop(),
       ),
     );
   }
@@ -952,11 +954,14 @@ class _ThemeSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 官方 TDCell：色板预览走 leftIconWidget，箭头用组件自带的 arrow
-    return TDCell(
-      title: style.label,
-      description: followSystem ? '跟随系统深色模式' : '固定主题，不跟随系统',
-      leftIconWidget: ClipRRect(
+    // 官方 TCell：色板预览走 prefix，箭头用组件自带的 arrow
+    return TCell(
+      title: Text(style.label, style: TdText.bodyLarge),
+      subtitle: Text(
+        followSystem ? '跟随系统深色模式' : '固定主题，不跟随系统',
+        style: TdText.bodySmall,
+      ),
+      prefix: ClipRRect(
         borderRadius: BorderRadius.circular(TdRadius.medium),
         child: SizedBox(
           width: 46,
@@ -970,16 +975,7 @@ class _ThemeSummary extends StatelessWidget {
         ),
       ),
       arrow: true,
-      hover: false,
-      bordered: false,
-      style: TDCellStyle(
-        context: context,
-        padding: EdgeInsets.zero,
-        backgroundColor: Colors.transparent,
-        titleStyle: TdText.bodyLarge,
-        descriptionStyle: TdText.bodySmall,
-      ),
-      onClick: (cell) => onTap(),
+      onTap: onTap,
     );
   }
 }

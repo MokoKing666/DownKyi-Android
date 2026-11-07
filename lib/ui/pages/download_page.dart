@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -44,26 +43,26 @@ class _DownloadPageState extends State<DownloadPage> {
                   TdLabel('${running.length} 进行中'),
                   const Spacer(),
                   if (_tab == 0)
-                    TDButton(
-                      text: '全部开始',
-                      type: TDButtonType.text,
-                      size: TDButtonSize.extraSmall,
-                      onTap: manager.resumeAll,
+                    TButton(
+                      child: const Text('全部开始'),
+                      variant: TButtonVariant.text,
+                      size: TButtonSize.extraSmall,
+                      onPressed: manager.resumeAll,
                     ),
                   if (_tab == 0)
-                    TDButton(
-                      text: '全部暂停',
-                      type: TDButtonType.text,
-                      size: TDButtonSize.extraSmall,
-                      onTap: manager.pauseAll,
+                    TButton(
+                      child: const Text('全部暂停'),
+                      variant: TButtonVariant.text,
+                      size: TButtonSize.extraSmall,
+                      onPressed: manager.pauseAll,
                     ),
                   if (_tab == 1)
-                    TDButton(
-                      text: '清空记录',
-                      type: TDButtonType.text,
-                      size: TDButtonSize.extraSmall,
-                      theme: TDButtonTheme.danger,
-                      onTap: () => _clearFinished(context, manager),
+                    TButton(
+                      child: const Text('清空记录'),
+                      variant: TButtonVariant.text,
+                      size: TButtonSize.extraSmall,
+                      colorPreset: TButtonColorPreset.danger,
+                      onPressed: () => _clearFinished(context, manager),
                     ),
                 ],
               ),
@@ -160,34 +159,39 @@ class _DownloadPageState extends State<DownloadPage> {
     }
 
     // true = 连文件一起删，false = 只删记录，null = 取消
-    // 官方弹层：标题走面板的 title（自带关闭按钮），内容只留两个选项
-    final deleteFiles =
-        await Navigator.of(context).push<bool>(TDSlidePopupRoute<bool>(
-      builder: (sheetContext) => TDPopupBottomDisplayPanel(
-        title: '清空已完成记录（$count 个）',
+    // 官方弹层：标题走表头，内容只留两个选项
+    late TPopupHandle handle;
+    handle = TPopup.show(
+      context,
+      options: TPopupOptions.bottom(
+        headerBuilder: (ctx, close) => TPopupHeader(
+          title: Text('清空已完成记录（$count 个）'),
+          cancelButton: TextButton(onPressed: close, child: const Text('取消')),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            TDCell(
-              title: '只删除记录',
-              description: '已下载的文件会保留（含系统相册里的）',
-              leftIcon: Icons.playlist_remove,
+            TCell(
+              title: const Text('只删除记录'),
+              subtitle: const Text('已下载的文件会保留（含系统相册里的）'),
+              prefix: const Icon(Icons.playlist_remove),
               arrow: true,
-              onClick: (cell) => Navigator.of(sheetContext).pop(false),
+              onTap: () => handle.close(false),
             ),
-            TDCell(
-              title: '删除记录和源文件',
-              description: '同时删除已下载的文件，不可恢复',
-              leftIcon: Icons.delete_forever_outlined,
+            TCell(
+              title: const Text('删除记录和源文件'),
+              subtitle: const Text('同时删除已下载的文件，不可恢复'),
+              prefix: const Icon(Icons.delete_forever_outlined),
               arrow: true,
-              onClick: (cell) => Navigator.of(sheetContext).pop(true),
+              onTap: () => handle.close(true),
             ),
             const SizedBox(height: TdSpacer.xs),
           ],
         ),
       ),
-    ));
+    );
+    final deleteFiles = await handle.result as bool?;
 
     if (deleteFiles == null || !context.mounted) return;
 

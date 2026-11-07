@@ -101,6 +101,28 @@ if (-not $source) {
 }
 Write-Host ("=== 1/4 源包: {0} ===" -f $source.Name)
 
+# ---------------------------------------------------------------------------
+# 1.x 起图标已拆分为独立的 tdesign_flutter_icons 包，
+# _TDIconsData extends IconData 的编译问题在上游修复，不再需要本地补丁。
+# 此时旧的 override 反而会把依赖指回 0.2.x 副本、破坏构建，必须清理后直接退出。
+# ---------------------------------------------------------------------------
+$sourceVersion = [version](($source.Name -replace '^tdesign_flutter-', '') -replace '-.*$', '')
+if ($sourceVersion -ge [version]'1.0.0') {
+    Write-Host '=== 源包为 1.x：已无需修补，清理旧的 third_party / override 后退出 ==='
+    if (Test-Path $overrideFile) { Remove-Item $overrideFile -Force }
+    if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force }
+    if (-not $SkipPubGet) {
+        Push-Location $repoRoot
+        try {
+            & flutter pub get
+            if ($LASTEXITCODE -ne 0) { throw "flutter pub get 失败（退出码 $LASTEXITCODE）" }
+        } finally {
+            Pop-Location
+        }
+    }
+    exit 0
+}
+
 # 一律用正斜杠：PowerShell Core 在 Linux 上不会把 `\` 当分隔符转换，
 # Join-Path 会拼出一个带反斜杠的字面路径直接找不到文件。Windows 也接受 `/`。
 $iconFile = Join-Path $source.FullName 'lib/src/components/icon/td_icons.dart'

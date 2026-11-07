@@ -114,7 +114,7 @@ aria2c --enable-rpc --rpc-listen-all=true --rpc-secret=你的密钥 --continue=t
 
 ## 🧾 更新日志
 
-### v2.4.0 —— 对照上游 downkyicore 补缺 + 审查修复
+### v2.4.0 —— 对照上游 downkyicore 补缺 + 审查修复 + TDesign 1.1.0
 
 对照上游 [crazysmile-PhD/downkyicore](https://github.com/crazysmile-PhD/downkyicore)
 v1.3.0 ~ v1.8.2 及其后续提交做了差距分析，挑出六项我们有缺口、且适合移动端的功能补上；
@@ -155,6 +155,15 @@ UP 主空间的投稿流里会混入整个**合集**条目（带封面与集数�
 过去被当成单个视频下载。现在不可勾选下载，点击进入合集列表，
 返回后原列表与勾选状态保持不变。顺带修掉空间列表**时长一直不显示**
 （"5:32" 形式的时长解析失败）的问题。
+
+**全面升级 TDesign 1.1.0（TD* → T*）**
+
+UI 库从 0.2.7 一步升级到官方 1.1.0 稳定版：组件改名 `TD*` → `T*`
+（TDButton→TButton、TDCell→TCell、TDAlertDialog→TDialog/TConfirmDialog、
+TDPopupBottomDisplayPanel→TPopup、TDBottomTabBar→TTabBar 等），主题改走
+`TThemeData` Token 体系（`TThemeBuilder` 注入），图标拆分到独立包。
+`prepare_tdesign.ps1` 的 IconData 补丁机制退役（1.x 已在上游修复），
+构建不再需要生成本地副本。弹层返回值统一由 `handle.result` 提供。
 
 **一并修掉的四个既有问题（代码审查发现）**
 
@@ -606,10 +615,6 @@ cd DownKyi-Android
 
 flutter pub get
 
-# ⚠️ 必需：生成修补过的 tdesign_flutter 并写入 pubspec_overrides.yaml
-#   （原因见下方「构建注意事项」；脚本内部会再跑一次 pub get 让 override 生效）
-pwsh -File tools/prepare_tdesign.ps1
-
 # 只出 arm64-v8a 的 release 包
 flutter build apk --release --target-platform android-arm64
 # 产物：build/app/outputs/flutter-apk/app-release.apk
@@ -686,20 +691,15 @@ packaging {
    Dart 分析器也会因 LSP 通道 URI 编码问题直接崩溃。
    工程里已加 `android.overridePathCheck=true`，但仍建议放在纯英文路径构建
    （本次即在 `C:\DownKyi` 完成构建与分析）。
-2. **`tdesign_flutter` 与新版 Flutter 不兼容（必须处理）**：
-   其 `td_icons.dart` 用 `class _TDIconsData extends IconData` 定义图标常量，
-   而 Flutter 3.47+ 已把 `IconData` 改为 `final class`（实测 3.49 确认；上游 0.2.7 与
-   0.2.8-fix.1 均未修复，修复只出现在预发布的 1.0.0-alpha.1）。
-   `tools/prepare_tdesign.ps1` 会从 pub 缓存复制出运行所需的最小集合、改写为直接构造
-   `IconData`（保留 `fontFamily/fontPackage`，图标字体照常渲染），落到 `third_party/`，
-   并写入 `pubspec_overrides.yaml` 让 pub 指过去。
-
-   > **为什么不再改 pub 缓存**：旧脚本直接改写 `%LOCALAPPDATA%\Pub\Cache\...`，
-   > 有三个问题——CI / 换机器 / 缓存被清都要重来；改的是所有工程共享的缓存，会污染别的项目；
-   > `flutter pub get` 一旦重下该包，补丁就静默失效。
-   > 现在 `third_party/` 与 `pubspec_overrides.yaml` 都在 `.gitignore` 里（仓库不因此膨胀），
-   > 同一 pub 版本必然产出同一份代码，pub 缓存也不再被触碰。
-   > 代价是 clone 之后需要执行一次本脚本。
+2. **`tdesign_flutter` 1.x 已无需本地补丁**（历史信息）：
+   0.2.x 的 `td_icons.dart` 用 `class _TDIconsData extends IconData` 定义图标常量，
+   而 Flutter 3.47+ 把 `IconData` 改成了 `final class`，编译直接报错。
+   当时的规避方案是 `tools/prepare_tdesign.ps1`：复制一份包、把图标改写为直接构造
+   `IconData`、再用 `pubspec_overrides.yaml` 指过去（原因与细节见脚本头部注释）。
+   **v2.4.0 起升级到 tdesign_flutter 1.1.0**：图标拆分为独立的
+   `tdesign_flutter_icons` 包并在上游修复了该问题，补丁机制随之退役——
+   构建只需 `flutter pub get`。脚本保留用于 0.2.x 的历史构建，检测到 1.x 源包时
+   会自动清理残留的 `third_party/` 与 override 后直接退出。
 3. **JVM 走 IPv6 易导致依赖下载超时**：`android/gradle.properties` 已加
    `-Djava.net.preferIPv4Stack=true`；若 wrapper 下载 Gradle 发行包仍超时，
    可手动下载后放入 `~/.gradle/wrapper/dists/gradle-<版本>-bin/<hash>/` 并创建同名 `.ok` 文件。
@@ -773,8 +773,8 @@ test/
 └── dependabot.yml                     依赖与 Actions 版本更新
 
 tools/
-├── build_apk.ps1                 一键打包（环境变量 + tdesign 准备 + 构建 + 校验）
-├── prepare_tdesign.ps1           生成修补过的 tdesign_flutter + pubspec_overrides.yaml
+├── build_apk.ps1                 一键打包（环境变量 + 构建 + 校验）
+├── prepare_tdesign.ps1           0.2.x 补丁工具（1.x 起自动跳过并清理旧 override）
 └── publish_release.ps1           本地发布（与 release.yml 二选一）
 ```
 

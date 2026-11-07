@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -52,23 +51,24 @@ class _DownKyiAppState extends State<DownKyiApp> with WidgetsBindingObserver {
     // 子组件在 build 时直接读 TdPalette 静态字段，因此必须在构建子树之前注入
     TdPalette.apply(tokens);
 
-    return TDTheme(
-      data: buildTdThemeData(tokens),
-      child: MaterialApp(
-        // 换肤时重建整棵子树：否则 const widget 会继续沿用旧配色
-        key: ValueKey<String>('theme-${style.name}'),
-        title: AppInfo.name,
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: tokens.brightness,
-          colorScheme: tokens.colorScheme,
-          scaffoldBackgroundColor: tokens.pageBackground,
-          splashFactory: NoSplash.splashFactory,
-          highlightColor: Colors.transparent,
-        ),
-        home: const HomeShell(),
+    // 1.x 的主题走 Material ThemeData（TThemeData 以 ThemeExtension 注入），
+    // 不再有 TDTheme 包裹组件
+    final tTheme = buildTThemeData(tokens);
+    return MaterialApp(
+      // 换肤时重建整棵子树：否则 const widget 会继续沿用旧配色
+      key: ValueKey<String>('theme-${style.name}'),
+      title: AppInfo.name,
+      debugShowCheckedModeBanner: false,
+      theme: (tokens.brightness == Brightness.dark
+              ? TThemeBuilder.dark(tTheme)
+              : TThemeBuilder.light(tTheme))
+          .copyWith(
+        colorScheme: tokens.colorScheme,
+        scaffoldBackgroundColor: tokens.pageBackground,
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
       ),
+      home: const HomeShell(),
     );
   }
 }

@@ -214,22 +214,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.35"
-  flutter_slidable:
-    dependency: transitive
-    description:
-      name: flutter_slidable
-      sha256: a857de7ea701f276fd6a6c4c67ae885b60729a3449e42766bb0e655171042801
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.2"
-  flutter_swiper_null_safety:
-    dependency: transitive
-    description:
-      name: flutter_swiper_null_safety
-      sha256: "5a855e0080d035c08e82f8b7fd2f106344943a30c9ab483b2584860a2f22eaaf"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.2"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -720,18 +704,19 @@ packages:
   tdesign_flutter:
     dependency: "direct main"
     description:
-      path: "third_party/tdesign_flutter"
-      relative: true
-    source: path
-    version: "0.2.7"
-  tdesign_flutter_adaptation:
-    dependency: transitive
-    description:
-      name: tdesign_flutter_adaptation
-      sha256: "707bbc52ec8b5872ea808500200f402007acf24c03a1cc823a3be2113c1d813a"
+      name: tdesign_flutter
+      sha256: "54570a422c400b8821b23ca1c48bd902aaec70e766444761088f027711074b4c"
       url: "https://pub.dev"
     source: hosted
-    version: "3.32.0"
+    version: "1.1.0"
+  tdesign_flutter_icons:
+    dependency: transitive
+    description:
+      name: tdesign_flutter_icons
+      sha256: "9bd2d92c20015e13615d33a254322a8adda62f62c08d5040cb7d4e12a49cb42e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.7"
   term_glyph:
     dependency: transitive
     description:

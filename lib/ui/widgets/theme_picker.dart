@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -20,13 +19,13 @@ class ThemePickerResult {
 /// 因此这里等面板完全关闭后再写入设置，避免在路由动画过程中拆掉 Navigator。
 Future<void> showThemePicker(BuildContext context) async {
   final settings = context.read<SettingsStore>();
-  final result = await Navigator.of(context).push<ThemePickerResult>(
-    TDSlidePopupRoute<ThemePickerResult>(
-      builder: (sheetContext) => TDPopupBottomDisplayPanel(
-        child: _ThemePickerSheet(settings: settings),
-      ),
+  final handle = TPopup.show(
+    context,
+    options: TPopupOptions.bottom(
+      child: _ThemePickerSheet(settings: settings),
     ),
   );
+  final result = await handle.result as ThemePickerResult?;
   if (result == null) return;
 
   // 留出面板退出动画的时间
@@ -122,11 +121,11 @@ class _ThemeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 官方 TDCell：色板预览走 leftIconWidget，选中标记走 rightIconWidget
-    return TDCell(
-      title: style.label,
-      description: style.description,
-      leftIconWidget: ClipRRect(
+    // 官方 TCell：色板预览走 prefix，选中标记走 trailing
+    return TCell(
+      title: Text(style.label, style: TdText.bodyLarge),
+      subtitle: Text(style.description, style: TdText.bodySmall),
+      prefix: ClipRRect(
         borderRadius: BorderRadius.circular(TdRadius.medium),
         child: SizedBox(
           width: 46,
@@ -139,20 +138,10 @@ class _ThemeOption extends StatelessWidget {
           ),
         ),
       ),
-      rightIconWidget: selected
+      trailing: selected
           ? Icon(Icons.check_circle, color: TdPalette.brand, size: 22)
           : null,
-      hover: false,
-      bordered: false,
-      style: TDCellStyle(
-        context: context,
-        padding: const EdgeInsets.symmetric(
-            horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
-        backgroundColor: Colors.transparent,
-        titleStyle: TdText.bodyLarge,
-        descriptionStyle: TdText.bodySmall,
-      ),
-      onClick: (cell) => onTap(),
+      onTap: onTap,
     );
   }
 }

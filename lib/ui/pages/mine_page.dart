@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -77,75 +76,77 @@ class MinePage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  TDButton(
-                    text: login.isLogin ? '账号' : '登录',
-                    theme: TDButtonTheme.primary,
-                    size: TDButtonSize.small,
+                  TButton(
+                    child: Text(login.isLogin ? '账号' : '登录'),
+                    size: TButtonSize.small,
+                    colorPreset: TButtonColorPreset.primary,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const LoginPage()),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: TdSpacer.small),
+            TdSection(
+              child: Column(
+                children: <Widget>[
+                  TCell(
+                    title: const Text('主题颜色'),
+                    prefix: const Icon(Icons.palette_outlined),
+                    note: Text(settings.themeStyle.label),
+                    arrow: true,
+                    onTap: () => showThemePicker(context),
+                  ),
+                  TCell(
+                    title: const Text('已完成任务'),
+                    prefix: const Icon(Icons.download_done),
+                    note: Text(
+                        '${finished.length} 个 · ${formatBytes(totalBytes)}'),
+                  ),
+                  TCell(
+                    title: const Text('默认清晰度'),
+                    prefix: const Icon(Icons.high_quality_outlined),
+                    note: Text(
+                        BiliConst.qualityNames[settings.defaultQuality] ??
+                            '${settings.defaultQuality}'),
+                  ),
+                  TCell(
+                    title: const Text('下载引擎'),
+                    prefix: const Icon(Icons.memory_outlined),
+                    note: Text(settings.downloadEngine.label),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: TdSpacer.small),
+            TdSection(
+              child: Column(
+                children: <Widget>[
+                  TCell(
+                    title: const Text('下载设置'),
+                    prefix: const Icon(Icons.settings_outlined),
+                    arrow: true,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const SettingsPage()),
+                    ),
+                  ),
+                  TCell(
+                    title: const Text('登录 / 切换账号'),
+                    prefix: const Icon(Icons.account_circle_outlined),
+                    arrow: true,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                           builder: (_) => const LoginPage()),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: TdSpacer.small),
-            TdSection(
-              child: Column(
-                children: <Widget>[
-                  TDCell(
-                    title: '主题颜色',
-                    leftIcon: Icons.palette_outlined,
-                    note: settings.themeStyle.label,
-                    arrow: true,
-                    onClick: (cell) => showThemePicker(context),
-                  ),
-                  TDCell(
-                    title: '已完成任务',
-                    leftIcon: Icons.download_done,
-                    note: '${finished.length} 个 · ${formatBytes(totalBytes)}',
-                  ),
-                  TDCell(
-                    title: '默认清晰度',
-                    leftIcon: Icons.high_quality_outlined,
-                    note: BiliConst.qualityNames[settings.defaultQuality] ??
-                        '${settings.defaultQuality}',
-                  ),
-                  TDCell(
-                    title: '下载引擎',
-                    leftIcon: Icons.memory_outlined,
-                    note: settings.downloadEngine.label,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: TdSpacer.small),
-            TdSection(
-              child: Column(
-                children: <Widget>[
-                  TDCell(
-                    title: '下载设置',
-                    leftIcon: Icons.settings_outlined,
-                    arrow: true,
-                    onClick: (cell) => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          builder: (_) => const SettingsPage()),
-                    ),
-                  ),
-                  TDCell(
-                    title: '登录 / 切换账号',
-                    leftIcon: Icons.account_circle_outlined,
-                    arrow: true,
-                    onClick: (cell) => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          builder: (_) => const LoginPage()),
-                    ),
-                  ),
-                  TDCell(
-                    title: '关于',
-                    leftIcon: Icons.info_outline,
-                    note: 'v${AppInfo.version}',
-                    onClick: (cell) => _showAbout(context),
+                  TCell(
+                    title: const Text('关于'),
+                    prefix: const Icon(Icons.info_outline),
+                    note: const Text('v${AppInfo.version}'),
+                    onTap: () => _showAbout(context),
                   ),
                 ],
               ),
@@ -165,9 +166,9 @@ class MinePage extends StatelessWidget {
   }
 
   void _showAbout(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => TDConfirmDialog(
+    TDialog.show<void>(
+      context,
+      dialog: TConfirmDialog(
         title: AppInfo.name,
         contentWidget: Column(
           mainAxisSize: MainAxisSize.min,
@@ -190,7 +191,6 @@ class MinePage extends StatelessWidget {
           ],
         ),
         buttonText: '知道了',
-        action: () => Navigator.of(dialogContext).pop(),
       ),
     );
   }
@@ -205,14 +205,14 @@ class _ThemeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = context.watch<SettingsStore>().themeStyle;
-    // 这是个按钮，不是行——所以用官方 TDButton（浅色主题），
+    // 这是个按钮，不是行——所以用官方 TButton（浅色主题），
     // 圆角、内边距、按下反馈都交给组件库
-    return TDButton(
-      text: style.label,
-      icon: Icons.palette_outlined,
-      theme: TDButtonTheme.light,
-      size: TDButtonSize.small,
-      onTap: onTap,
+    return TButton(
+      child: Text(style.label),
+      icon: const Icon(Icons.palette_outlined),
+      colorPreset: TButtonColorPreset.light,
+      size: TButtonSize.small,
+      onPressed: onTap,
     );
   }
 }

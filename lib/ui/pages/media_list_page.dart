@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -41,14 +40,14 @@ class MediaListPage extends StatelessWidget {
                           style: TdText.bodySmall,
                         ),
                       ),
-                      TDButton(
-                        text: parse.selectedCount == parse.selectableCount
+                      TButton(
+                        child: Text(parse.selectedCount == parse.selectableCount
                             ? '全不选'
-                            : '全选',
-                        type: TDButtonType.text,
-                        size: TDButtonSize.extraSmall,
-                        theme: TDButtonTheme.primary,
-                        onTap: () => parse.selectAllBatch(
+                            : '全选'),
+                        variant: TButtonVariant.text,
+                        size: TButtonSize.extraSmall,
+                        colorPreset: TButtonColorPreset.primary,
+                        onPressed: () => parse.selectAllBatch(
                             parse.selectedCount != parse.selectableCount),
                       ),
                     ],
@@ -67,11 +66,11 @@ class MediaListPage extends StatelessWidget {
                           child: Center(
                             child: parse.loadingMore
                                 ? const TdLoadingView(text: '加载更多')
-                                : TDButton(
-                                    text: '加载更多',
-                                    theme: TDButtonTheme.light,
-                                    size: TDButtonSize.small,
-                                    onTap: parse.loadMore,
+                                : TButton(
+                                    child: const Text('加载更多'),
+                                    colorPreset: TButtonColorPreset.light,
+                                    size: TButtonSize.small,
+                                    onPressed: parse.loadMore,
                                   ),
                           ),
                         );

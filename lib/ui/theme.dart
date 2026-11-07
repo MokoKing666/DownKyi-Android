@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 /// 哔哩哔哩粉：三套主题统一的强调色。
@@ -247,8 +246,10 @@ class AppThemeTokens {
     cardBorder: Color(0xFF2A2C30),
   );
 
-  /// 映射到 TDesign 的 colorMap，让 TDButton / TDCell / TDSwitch 等官方组件跟随换肤。
+  /// 映射到 TDesign 的 colorMap，让 TButton / TCell / TSwitch 等官方组件跟随换肤。
   Map<String, Color> get tdColorMap => <String, Color>{
+        // 品牌色：brandColor 是组件默认引用的主 Token，色阶含义同 0.2.x
+        'brandColor': brand,
         // 品牌色阶：brandColor7 = 常态，6 = hover，8 = active，1~3 = 浅底
         'brandColor1': brandLight,
         'brandColor2': brandLight,
@@ -299,15 +300,15 @@ class AppThemeTokens {
         'bgColorSecondaryComponent': gray3,
         'bgColorSecondaryComponentHover': gray4,
         'bgColorSecondaryComponentActive': gray4,
-        // 文字
-        'fontGyColor1': textPrimary,
-        'fontGyColor2': textSecondary,
-        'fontGyColor3': textPlaceholder,
-        'fontGyColor4': textDisabled,
+        // 文字（1.x 起 fontGyColor* → fontGray*，textDisabledColor → textColorDisabled）
+        'fontGray1': textPrimary,
+        'fontGray2': textSecondary,
+        'fontGray3': textPlaceholder,
+        'fontGray4': textDisabled,
         'textColorPrimary': textPrimary,
         'textColorSecondary': textSecondary,
         'textColorPlaceholder': textPlaceholder,
-        'textDisabledColor': textDisabled,
+        'textColorDisabled': textDisabled,
         'textColorBrand': brand,
         'textColorLink': brandActive,
         // 描边
@@ -316,12 +317,13 @@ class AppThemeTokens {
         // - componentStrokeColor：发丝线（分隔线、组件内部细线），浅是应该的
         // - componentBorderColor：**组件轮廓**（勾选框圆圈、步进器、标签边框）
         //
-        // 之前把 componentBorderColor 也映射成 divider，结果是未选中的勾选框
+        // 之前把 componentBorder 也映射成 divider，结果是未选中的勾选框
         // 圆圈在两种主题下都几乎看不见（亮色 #F1F2F3 / 暗色 #26272B），
         // 用户只能看到它背后那块底色，反馈成「圆圈外面有方框」。
         // 官方默认亮色是 #DCDCDC 量级，所以就按「中等灰」给它取色。
-        'componentStrokeColor': border,
-        'componentBorderColor': brightness == Brightness.dark ? gray6 : gray4,
+        // （1.x 起 componentStrokeColor/componentBorderColor → componentStroke/componentBorder）
+        'componentStroke': border,
+        'componentBorder': brightness == Brightness.dark ? gray6 : gray4,
       };
 
   /// Material 层配色（TextField / AlertDialog / BottomSheet 等跟随换肤）
@@ -338,16 +340,14 @@ class AppThemeTokens {
       );
 }
 
-/// 按当前色板构造 TDesign 主题数据。
+/// 按当前色板构造 TDesign 主题数据（1.x 的 Token 体系）。
 ///
-/// 通过 `copyWithTDThemeData` 在官方默认主题上覆写 colorMap，
-/// 这样 TDButton / TDCell / TDSwitch 等组件会同步变成哔哩哔哩粉。
-TDThemeData buildTdThemeData(AppThemeTokens tokens) {
-  final base = TDThemeData.defaultData();
-  final data = base.copyWithTDThemeData(
-    'downkyi_${tokens.style.name}',
+/// 通过 `TThemeData.copyWith(colorMap:)` 在官方默认 Token 上覆写颜色，
+/// 这样 TButton / TCell / TSwitch 等组件会同步变成哔哩哔哩粉。
+/// 交给 `TThemeBuilder.light/dark` 转成 Material ThemeData 后注入 MaterialApp。
+TThemeData buildTThemeData(AppThemeTokens tokens) {
+  return TThemeData.defaultData().copyWith(
+    name: 'downkyi_${tokens.style.name}',
     colorMap: tokens.tdColorMap,
   );
-  data.light = data;
-  return data;
 }

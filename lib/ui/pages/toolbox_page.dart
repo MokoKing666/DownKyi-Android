@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -103,12 +102,12 @@ class ToolboxPage extends StatelessWidget {
                         : Column(
                             children: <Widget>[
                               for (final task in tasks)
-                                TDCell(
-                                  title: task.title,
-                                  note: formatBytes(task.totalBytes),
-                                  description: _statusOf(task),
+                                TCell(
+                                  title: Text(task.title),
+                                  note: Text(formatBytes(task.totalBytes)),
+                                  subtitle: Text(_statusOf(task)),
                                   arrow: true,
-                                  onClick: (cell) =>
+                                  onTap: () =>
                                       _showActions(context, manager, task),
                                 ),
                             ],
@@ -153,48 +152,47 @@ class ToolboxPage extends StatelessWidget {
       return null;
     }
     // 官方弹层：面板骨架替代「Container + SafeArea」两层自绘
-    return Navigator.of(context).push<DownloadTask>(
-      TDSlidePopupRoute<DownloadTask>(
-        builder: (sheetContext) => TDPopupBottomDisplayPanel(
-          maxHeightRatio: 0.72,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.72),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    TdSpacer.medium,
-                    TdSpacer.medium,
-                    TdSpacer.medium,
-                    TdSpacer.xs,
-                  ),
-                  child: Text(title, style: TdText.titleSmall),
+    late TPopupHandle handle;
+    handle = TPopup.show(
+      context,
+      options: TPopupOptions.bottom(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.72),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  TdSpacer.medium,
+                  TdSpacer.medium,
+                  TdSpacer.medium,
+                  TdSpacer.xs,
                 ),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: <Widget>[
-                      for (final task in tasks)
-                        TDCell(
-                          title: task.title,
-                          description: _statusOf(task),
-                          note: formatBytes(task.totalBytes),
-                          arrow: true,
-                          onClick: (cell) =>
-                              Navigator.of(sheetContext).pop(task),
-                        ),
-                    ],
-                  ),
+                child: Text(title, style: TdText.titleSmall),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: <Widget>[
+                    for (final task in tasks)
+                      TCell(
+                        title: Text(task.title),
+                        subtitle: Text(_statusOf(task)),
+                        note: Text(formatBytes(task.totalBytes)),
+                        arrow: true,
+                        onTap: () => handle.close(task),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
+    return handle.result as Future<DownloadTask?>;
   }
 
   // ------------------------------------------------------------------
@@ -378,58 +376,57 @@ class ToolboxPage extends StatelessWidget {
     required MediaProbe? probe,
     required String baseName,
   }) {
-    return Navigator.of(context).push<ConvertTarget>(
-      TDSlidePopupRoute<ConvertTarget>(
-        builder: (sheetContext) => TDPopupBottomDisplayPanel(
-          maxHeightRatio: 0.78,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.78),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      TdSpacer.medium,
-                      TdSpacer.medium,
-                      TdSpacer.medium,
-                      TdSpacer.xs,
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        Icon(Icons.transform, size: 20, color: TdPalette.brand),
-                        const SizedBox(width: TdSpacer.xs),
-                        Expanded(
-                            child: Text('选择转换目标', style: TdText.titleSmall)),
-                      ],
-                    ),
+    late TPopupHandle handle;
+    handle = TPopup.show(
+      context,
+      options: TPopupOptions.bottom(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.78),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    TdSpacer.medium,
+                    TdSpacer.medium,
+                    TdSpacer.medium,
+                    TdSpacer.xs,
                   ),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
-                    child: Text(
-                      _describeSource(probe, baseName),
-                      style: TdText.bodySmall
-                          .copyWith(color: TdPalette.textPlaceholder),
-                    ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.transform, size: 20, color: TdPalette.brand),
+                      const SizedBox(width: TdSpacer.xs),
+                      Expanded(child: Text('选择转换目标', style: TdText.titleSmall)),
+                    ],
                   ),
-                  const SizedBox(height: TdSpacer.xs),
-                  for (final target in ConvertTarget.values)
-                    TDCell(
-                      title: target.label,
-                      description: target.description,
-                      arrow: true,
-                      onClick: (cell) => Navigator.of(sheetContext).pop(target),
-                    ),
-                  const SizedBox(height: TdSpacer.xs),
-                ],
-              ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: TdSpacer.medium),
+                  child: Text(
+                    _describeSource(probe, baseName),
+                    style: TdText.bodySmall
+                        .copyWith(color: TdPalette.textPlaceholder),
+                  ),
+                ),
+                const SizedBox(height: TdSpacer.xs),
+                for (final target in ConvertTarget.values)
+                  TCell(
+                    title: Text(target.label),
+                    subtitle: Text(target.description),
+                    arrow: true,
+                    onTap: () => handle.close(target),
+                  ),
+                const SizedBox(height: TdSpacer.xs),
+              ],
             ),
           ),
         ),
       ),
     );
+    return handle.result as Future<ConvertTarget?>;
   }
 
   static String _describeSource(MediaProbe? probe, String baseName) {
@@ -501,80 +498,81 @@ class ToolboxPage extends StatelessWidget {
 
   Future<void> _showActions(
       BuildContext context, DownloadManager manager, DownloadTask task) async {
-    await Navigator.of(context).push<void>(
-      TDSlidePopupRoute<void>(
-        builder: (sheetContext) => TDPopupBottomDisplayPanel(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
-                child: Text(
-                  task.title,
-                  style: TdText.titleSmall,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+    late TPopupHandle handle;
+    handle = TPopup.show(
+      context,
+      options: TPopupOptions.bottom(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: TdSpacer.medium, vertical: TdSpacer.xs),
+              child: Text(
+                task.title,
+                style: TdText.titleSmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              TDCell(
-                title: '打开文件',
-                leftIcon: Icons.play_circle_outline,
-                arrow: true,
-                onClick: (cell) async {
-                  Navigator.of(sheetContext).pop();
-                  final ok = await manager.openFile(task);
-                  if (context.mounted && !ok) tdToast(context, '没有可用的播放器');
-                },
-              ),
-              TDCell(
-                title: '格式转换（FFmpeg）',
-                leftIcon: Icons.transform,
-                description: '转封装 / 提取音频 / GIF / 压缩 / 换编码',
-                arrow: true,
-                onClick: (cell) async {
-                  Navigator.of(sheetContext).pop();
-                  final source = task.exportedPath ?? task.outputPath;
-                  if (source == null || source.isEmpty) {
-                    if (context.mounted) tdToast(context, '没有可转换的文件');
-                    return;
-                  }
-                  await _prepareAndConvert(context,
-                      source: source, baseName: task.fileName);
-                },
-              ),
-              TDCell(
-                title: '导出到相册 / 下载目录',
-                leftIcon: Icons.save_alt,
-                arrow: true,
-                onClick: (cell) async {
-                  Navigator.of(sheetContext).pop();
-                  await _export(context, task);
-                },
-              ),
-              TDCell(
-                title: '重新合并音视频',
-                leftIcon: Icons.merge_type,
-                arrow: true,
-                onClick: (cell) async {
-                  Navigator.of(sheetContext).pop();
-                  await _remux(context, task);
-                },
-              ),
-              TDCell(
-                title: '重新生成弹幕文件',
-                leftIcon: Icons.subtitles_outlined,
-                arrow: true,
-                onClick: (cell) async {
-                  Navigator.of(sheetContext).pop();
-                  await _rebuildDanmaku(context, task);
-                },
-              ),
-            ],
-          ),
+            ),
+            TCell(
+              title: const Text('打开文件'),
+              prefix: const Icon(Icons.play_circle_outline),
+              arrow: true,
+              onTap: () async {
+                handle.close();
+                final ok = await manager.openFile(task);
+                if (context.mounted && !ok) tdToast(context, '没有可用的播放器');
+              },
+            ),
+            TCell(
+              title: const Text('格式转换（FFmpeg）'),
+              subtitle: const Text('转封装 / 提取音频 / GIF / 压缩 / 换编码'),
+              prefix: const Icon(Icons.transform),
+              arrow: true,
+              onTap: () async {
+                handle.close();
+                final source = task.exportedPath ?? task.outputPath;
+                if (source == null || source.isEmpty) {
+                  if (context.mounted) tdToast(context, '没有可转换的文件');
+                  return;
+                }
+                await _prepareAndConvert(context,
+                    source: source, baseName: task.fileName);
+              },
+            ),
+            TCell(
+              title: const Text('导出到相册 / 下载目录'),
+              prefix: const Icon(Icons.save_alt),
+              arrow: true,
+              onTap: () async {
+                handle.close();
+                await _export(context, task);
+              },
+            ),
+            TCell(
+              title: const Text('重新合并音视频'),
+              prefix: const Icon(Icons.merge_type),
+              arrow: true,
+              onTap: () async {
+                handle.close();
+                await _remux(context, task);
+              },
+            ),
+            TCell(
+              title: const Text('重新生成弹幕文件'),
+              prefix: const Icon(Icons.subtitles_outlined),
+              arrow: true,
+              onTap: () async {
+                handle.close();
+                await _rebuildDanmaku(context, task);
+              },
+            ),
+          ],
         ),
       ),
     );
+    await handle.result;
   }
 
   /// 用 FFmpeg 无损重新封装。
@@ -768,11 +766,11 @@ class _ToolEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        // 官方 TDCell：图标走 leftIconWidget，箭头用组件自带的 arrow
-        TDCell(
-          title: title,
-          description: description,
-          leftIconWidget: Container(
+        // 官方 TCell：图标走 prefix，箭头用组件自带的 arrow
+        TCell(
+          title: Text(title, style: TdText.bodyLarge),
+          subtitle: Text(description, style: TdText.bodySmall),
+          prefix: Container(
             width: 34,
             height: 34,
             decoration: BoxDecoration(
@@ -782,18 +780,9 @@ class _ToolEntry extends StatelessWidget {
             child: Icon(icon, size: 19, color: TdPalette.brand),
           ),
           arrow: true,
-          hover: false,
-          bordered: false,
-          style: TDCellStyle(
-            context: context,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            backgroundColor: Colors.transparent,
-            titleStyle: TdText.bodyLarge,
-            descriptionStyle: TdText.bodySmall,
-          ),
-          onClick: (cell) => onTap(),
+          onTap: onTap,
         ),
-        if (showDivider) TDDivider(height: 0.5, color: TdPalette.divider),
+        if (showDivider) Divider(height: 0.5, color: TdPalette.divider),
       ],
     );
   }
@@ -830,14 +819,9 @@ class _ConvertDialog extends StatelessWidget {
               builder: (context, value, _) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  TDProgress(
-                    type: TDProgressType.linear,
+                  TProgress.linear(
                     value: value <= 0 ? 0 : value.clamp(0.0, 1.0),
-                    strokeWidth: 6,
-                    color: TdPalette.brand,
-                    backgroundColor: TdPalette.gray2,
-                    showLabel: false,
-                    linearBorderRadius: BorderRadius.circular(TdRadius.round),
+                    label: const SizedBox.shrink(),
                   ),
                   const SizedBox(height: TdSpacer.xs),
                   Text(
@@ -852,11 +836,11 @@ class _ConvertDialog extends StatelessWidget {
             const SizedBox(height: TdSpacer.small),
             Align(
               alignment: Alignment.centerRight,
-              child: TDButton(
-                text: '取消',
-                type: TDButtonType.text,
-                size: TDButtonSize.small,
-                onTap: onCancel,
+              child: TButton(
+                child: const Text('取消'),
+                variant: TButtonVariant.text,
+                size: TButtonSize.small,
+                onPressed: onCancel,
               ),
             ),
           ],

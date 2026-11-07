@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
@@ -149,35 +148,37 @@ class _ParsePageState extends State<ParsePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   // 官方多行输入框，替代自绘的容器 + TextField
-                  TDTextarea(
+                  TTextarea(
                     controller: _controller,
                     maxLines: 4,
                     minLines: 3,
                     hintText: '粘贴视频链接 / BV 号 / ep、ss 号 / 收藏夹 / 合集链接',
-                    backgroundColor: TdPalette.gray1,
                   ),
                   const SizedBox(height: TdSpacer.small),
                   Row(
                     children: <Widget>[
                       Expanded(
-                        child: TDButton(
-                          text: '从剪贴板粘贴',
-                          theme: TDButtonTheme.light,
-                          type: TDButtonType.fill,
-                          size: TDButtonSize.medium,
-                          isBlock: true,
-                          onTap: _paste,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: TButton(
+                            child: const Text('从剪贴板粘贴'),
+                            colorPreset: TButtonColorPreset.light,
+                            variant: TButtonVariant.fill,
+                            size: TButtonSize.medium,
+                            onPressed: _paste,
+                          ),
                         ),
                       ),
                       const SizedBox(width: TdSpacer.small),
                       Expanded(
-                        child: TDButton(
-                          text: parse.loading ? '解析中…' : '开始解析',
-                          theme: TDButtonTheme.primary,
-                          size: TDButtonSize.medium,
-                          isBlock: true,
-                          disabled: parse.loading,
-                          onTap: _parse,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: TButton(
+                            child: Text(parse.loading ? '解析中…' : '开始解析'),
+                            colorPreset: TButtonColorPreset.primary,
+                            size: TButtonSize.medium,
+                            onPressed: parse.loading ? null : _parse,
+                          ),
                         ),
                       ),
                     ],
@@ -256,12 +257,12 @@ class _ParsePageState extends State<ParsePage> {
                       style: TdText.bodyMedium,
                     ),
                   ),
-                  TDButton(
-                    text: login.isLogin ? '切换' : '去登录',
-                    theme: TDButtonTheme.primary,
-                    type: TDButtonType.text,
-                    size: TDButtonSize.small,
-                    onTap: () => Navigator.of(context).push(
+                  TButton(
+                    child: Text(login.isLogin ? '切换' : '去登录'),
+                    colorPreset: TButtonColorPreset.primary,
+                    variant: TButtonVariant.text,
+                    size: TButtonSize.small,
+                    onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                           builder: (_) => const LoginPage()),
                     ),
@@ -290,7 +291,7 @@ class _ParsePageState extends State<ParsePage> {
     required String title,
     required VoidCallback onTap,
   }) {
-    // 官方 TDCell：图标走 leftIconWidget、箭头用自带的 arrow；
+    // 官方 TCell：图标走 prefix、箭头用自带的 arrow；
     // 外层保留固定宽高的浅底容器（这是版式，不是控件）
     return Container(
       width: width,
@@ -299,19 +300,11 @@ class _ParsePageState extends State<ParsePage> {
         color: TdPalette.gray1,
         borderRadius: BorderRadius.circular(TdRadius.large),
       ),
-      child: TDCell(
-        title: title,
-        leftIconWidget: Icon(icon, size: 20, color: TdPalette.brand),
+      child: TCell(
+        title: Text(title, style: TdText.bodyMedium),
+        prefix: Icon(icon, size: 20, color: TdPalette.brand),
         arrow: true,
-        hover: false,
-        bordered: false,
-        style: TDCellStyle(
-          context: context,
-          padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
-          backgroundColor: Colors.transparent,
-          titleStyle: TdText.bodyMedium,
-        ),
-        onClick: (cell) => onTap(),
+        onTap: onTap,
       ),
     );
   }
@@ -333,12 +326,11 @@ class _ParsePageState extends State<ParsePage> {
         tdToast(context, '没有找到收藏夹');
         return;
       }
-      final selected = await showModalBottomSheet<FavFolder>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        // 官方弹层：面板骨架替代自绘的圆角容器
-        builder: (sheetContext) => TDPopupBottomDisplayPanel(
+      // 官方弹层：面板骨架替代自绘的圆角容器
+      late TPopupHandle handle;
+      handle = TPopup.show(
+        context,
+        options: TPopupOptions.bottom(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,12 +342,11 @@ class _ParsePageState extends State<ParsePage> {
                   shrinkWrap: true,
                   children: <Widget>[
                     for (final folder in folders)
-                      TDCell(
-                        title: folder.title,
-                        note: '${folder.count} 个视频',
+                      TCell(
+                        title: Text(folder.title),
+                        note: Text('${folder.count} 个视频'),
                         arrow: true,
-                        onClick: (cell) =>
-                            Navigator.of(sheetContext).pop(folder),
+                        onTap: () => handle.close(folder),
                       ),
                   ],
                 ),
@@ -364,6 +355,7 @@ class _ParsePageState extends State<ParsePage> {
           ),
         ),
       );
+      final selected = await handle.result as FavFolder?;
       if (selected == null) return;
       await _openLink(
           'https://www.bilibili.com/medialist/detail/ml${selected.id}?fid=${selected.id}');
@@ -441,24 +433,26 @@ class _ParsePageState extends State<ParsePage> {
 
   Future<void> _promptMid(BuildContext context) async {
     final controller = TextEditingController();
-    final mid = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => TDAlertDialog(
-        title: '输入 UP 主 UID',
-        contentWidget: TDInput(
+    final mid = await TDialog.show<String>(
+      context,
+      dialog: TDialog(
+        title: const Text('输入 UP 主 UID'),
+        content: TInput(
           controller: controller,
           inputType: TextInputType.number,
           hintText: '例如 2（可在空间地址里找到）',
-          backgroundColor: TdPalette.gray1,
         ),
-        leftBtn: TDDialogButtonOptions(
-          title: '取消',
-          action: () => Navigator.of(dialogContext).pop(),
-        ),
-        rightBtn: TDDialogButtonOptions(
-          title: '确定',
-          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-        ),
+        actions: <TDialogAction>[
+          const TDialogAction(child: Text('取消')),
+          TDialogAction(
+            child: const Text('确定'),
+            role: TDialogActionRole.primary,
+            // result 是构造期定值，动态取输入框内容需要手动 pop
+            closeOnPressed: false,
+            onPressed: () => Navigator.of(context, rootNavigator: true)
+                .pop(controller.text.trim()),
+          ),
+        ],
       ),
     );
     if (mid == null || mid.isEmpty) return;
@@ -489,11 +483,10 @@ class _ParsePageState extends State<ParsePage> {
       await _openLink('https://space.bilibili.com/$uid');
       return;
     }
-    final selected = await showModalBottomSheet<SeasonSummary>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+    late TPopupHandle handle;
+    handle = TPopup.show(
+      context,
+      options: TPopupOptions.bottom(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,11 +498,11 @@ class _ParsePageState extends State<ParsePage> {
                 shrinkWrap: true,
                 children: <Widget>[
                   for (final season in seasons)
-                    TDCell(
-                      title: season.name,
-                      note: '${season.total} 个视频',
+                    TCell(
+                      title: Text(season.name),
+                      note: Text('${season.total} 个视频'),
                       arrow: true,
-                      onClick: (cell) => Navigator.of(sheetContext).pop(season),
+                      onTap: () => handle.close(season),
                     ),
                 ],
               ),
@@ -518,6 +511,7 @@ class _ParsePageState extends State<ParsePage> {
         ),
       ),
     );
+    final selected = await handle.result as SeasonSummary?;
     if (selected == null || !mounted) return;
     await _openLink(
         'https://space.bilibili.com/$uid/lists/${selected.seasonId}');

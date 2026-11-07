@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
@@ -67,9 +66,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       showDivider: true,
       backgroundColor: TdPalette.pageBackground,
       child: _loading
-          ? const Center(
-              child: TDLoading(
-                  size: TDLoadingSize.medium, icon: TDLoadingIcon.circle))
+          ? const Center(child: TLoading(size: 20, icon: TLoadingIcon.circle))
           : Column(
               children: <Widget>[
                 Expanded(
@@ -144,37 +141,37 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             spacing: TdSpacer.xs,
             runSpacing: TdSpacer.xs,
             children: <Widget>[
-              TDButton(
-                text: pending > 0 ? '查看 $pending 个新内容' : '查看内容',
-                theme: TDButtonTheme.primary,
-                type: TDButtonType.outline,
-                size: TDButtonSize.extraSmall,
-                onTap: () => unawaited(_openItems(subscription)),
+              TButton(
+                child: Text(pending > 0 ? '查看 $pending 个新内容' : '查看内容'),
+                variant: TButtonVariant.outline,
+                size: TButtonSize.extraSmall,
+                colorPreset: TButtonColorPreset.primary,
+                onPressed: () => unawaited(_openItems(subscription)),
               ),
-              TDButton(
-                text: '立即检查',
-                theme: TDButtonTheme.light,
-                type: TDButtonType.fill,
-                size: TDButtonSize.extraSmall,
-                onTap: () => unawaited(_checkOne(subscription)),
+              TButton(
+                child: const Text('立即检查'),
+                variant: TButtonVariant.fill,
+                size: TButtonSize.extraSmall,
+                colorPreset: TButtonColorPreset.light,
+                onPressed: () => unawaited(_checkOne(subscription)),
               ),
-              TDButton(
-                text: subscription.autoDownload ? '自动下载：开' : '自动下载：关',
-                theme: subscription.autoDownload
-                    ? TDButtonTheme.primary
-                    : TDButtonTheme.light,
-                type: subscription.autoDownload
-                    ? TDButtonType.outline
-                    : TDButtonType.fill,
-                size: TDButtonSize.extraSmall,
-                onTap: () => unawaited(_toggleAutoDownload(subscription)),
+              TButton(
+                child: Text(subscription.autoDownload ? '自动下载：开' : '自动下载：关'),
+                variant: subscription.autoDownload
+                    ? TButtonVariant.outline
+                    : TButtonVariant.fill,
+                size: TButtonSize.extraSmall,
+                colorPreset: subscription.autoDownload
+                    ? TButtonColorPreset.primary
+                    : TButtonColorPreset.light,
+                onPressed: () => unawaited(_toggleAutoDownload(subscription)),
               ),
-              TDButton(
-                text: '删除',
-                theme: TDButtonTheme.light,
-                type: TDButtonType.text,
-                size: TDButtonSize.extraSmall,
-                onTap: () => unawaited(_confirmDelete(subscription)),
+              TButton(
+                child: const Text('删除'),
+                variant: TButtonVariant.text,
+                size: TButtonSize.extraSmall,
+                colorPreset: TButtonColorPreset.light,
+                onPressed: () => unawaited(_confirmDelete(subscription)),
               ),
             ],
           ),
@@ -193,24 +190,29 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         child: Row(
           children: <Widget>[
             Expanded(
-              child: TDButton(
-                text: '添加订阅',
-                theme: TDButtonTheme.light,
-                type: TDButtonType.fill,
-                size: TDButtonSize.medium,
-                isBlock: true,
-                onTap: () => unawaited(_addSubscription()),
+              child: SizedBox(
+                width: double.infinity,
+                child: TButton(
+                  child: const Text('添加订阅'),
+                  variant: TButtonVariant.fill,
+                  size: TButtonSize.medium,
+                  colorPreset: TButtonColorPreset.light,
+                  onPressed: () => unawaited(_addSubscription()),
+                ),
               ),
             ),
             const SizedBox(width: TdSpacer.small),
             Expanded(
-              child: TDButton(
-                text: _checking ? '检查中…' : '全部检查',
-                theme: TDButtonTheme.primary,
-                size: TDButtonSize.medium,
-                isBlock: true,
-                disabled: _checking || _subscriptions.isEmpty,
-                onTap: () => unawaited(_checkAll()),
+              child: SizedBox(
+                width: double.infinity,
+                child: TButton(
+                  child: Text(_checking ? '检查中…' : '全部检查'),
+                  size: TButtonSize.medium,
+                  colorPreset: TButtonColorPreset.primary,
+                  onPressed: _checking || _subscriptions.isEmpty
+                      ? null
+                      : () => unawaited(_checkAll()),
+                ),
               ),
             ),
           ],
@@ -236,25 +238,30 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
   Future<void> _addSubscription() async {
     final controller = TextEditingController();
-    final input = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => TDAlertDialog(
-        title: '添加订阅',
-        contentWidget: TDTextarea(
+    final input = await TDialog.show<String>(
+      context,
+      dialog: TDialog(
+        title: const Text('添加订阅'),
+        content: TTextarea(
           controller: controller,
           maxLines: 3,
           minLines: 1,
           hintText: '粘贴 UP 主空间 / 合集 / 收藏夹 / 番剧 ss 链接',
-          backgroundColor: TdPalette.gray1,
         ),
-        leftBtn: TDDialogButtonOptions(
-          title: '取消',
-          action: () => Navigator.of(dialogContext).pop(),
-        ),
-        rightBtn: TDDialogButtonOptions(
-          title: '添加',
-          action: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-        ),
+        actions: <TDialogAction>[
+          const TDialogAction(
+            child: const Text('取消'),
+            result: null,
+          ),
+          TDialogAction(
+            child: const Text('添加'),
+            role: TDialogActionRole.primary,
+            // result 是构造期定值，动态取输入框内容需要手动 pop
+            closeOnPressed: false,
+            onPressed: () => Navigator.of(context, rootNavigator: true)
+                .pop(controller.text.trim()),
+          ),
+        ],
       ),
     );
     if (input == null || input.isEmpty || !mounted) return;
@@ -344,21 +351,25 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   }
 
   Future<void> _confirmDelete(Subscription subscription) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => TDAlertDialog(
-        title: '删除订阅',
-        content:
-            '将同时清除「${subscription.title.isEmpty ? subscription.sourceId : subscription.title}」'
-            '已发现的内容记录。已下载的文件不受影响。',
-        leftBtn: TDDialogButtonOptions(
-          title: '取消',
-          action: () => Navigator.of(dialogContext).pop(false),
+    final confirmed = await TDialog.show<bool>(
+      context,
+      dialog: TDialog(
+        title: const Text('删除订阅'),
+        content: Text(
+          '将同时清除「${subscription.title.isEmpty ? subscription.sourceId : subscription.title}」'
+          '已发现的内容记录。已下载的文件不受影响。',
         ),
-        rightBtn: TDDialogButtonOptions(
-          title: '删除',
-          action: () => Navigator.of(dialogContext).pop(true),
-        ),
+        actions: <TDialogAction>[
+          const TDialogAction(
+            child: const Text('取消'),
+            result: false,
+          ),
+          const TDialogAction(
+            child: const Text('删除'),
+            result: true,
+            role: TDialogActionRole.primary,
+          ),
+        ],
       ),
     );
     if (confirmed != true) return;
@@ -422,9 +433,7 @@ class _SubscriptionItemsPageState extends State<SubscriptionItemsPage> {
       showDivider: true,
       backgroundColor: TdPalette.pageBackground,
       child: _loading
-          ? const Center(
-              child: TDLoading(
-                  size: TDLoadingSize.medium, icon: TDLoadingIcon.circle))
+          ? const Center(child: TLoading(size: 20, icon: TLoadingIcon.circle))
           : _items.isEmpty
               ? const TdEmptyView(text: '没有未处理的新内容')
               : Column(

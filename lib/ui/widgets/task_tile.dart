@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/formatter.dart';
@@ -96,13 +95,10 @@ class TaskTile extends StatelessWidget {
             ),
           ],
           const SizedBox(height: TdSpacer.xs),
-          TDProgress(
-            type: TDProgressType.linear,
+          TProgress.linear(
             value: task.progress,
-            showLabel: false,
-            strokeWidth: 4,
-            color: _progressColor,
-            linearBorderRadius: BorderRadius.circular(TdRadius.round),
+            status: _progressStatus,
+            label: const SizedBox.shrink(),
           ),
           const SizedBox(height: TdSpacer.xs),
           _buildActions(context),
@@ -111,10 +107,10 @@ class TaskTile extends StatelessWidget {
     );
   }
 
-  Color get _progressColor => switch (task.status) {
-        TaskStatus.failed => TdPalette.error,
-        TaskStatus.completed => TdPalette.success,
-        _ => TdPalette.brand,
+  TProgressStatus get _progressStatus => switch (task.status) {
+        TaskStatus.failed => TProgressStatus.error,
+        TaskStatus.completed => TProgressStatus.success,
+        _ => TProgressStatus.normal,
       };
 
   Widget _buildStatusLine() {
@@ -226,21 +222,23 @@ class TaskTile extends StatelessWidget {
   }
 
   Widget _textButton(String text, VoidCallback? onTap, {bool danger = false}) {
-    return TDButton(
-      text: text,
-      type: TDButtonType.text,
-      size: TDButtonSize.extraSmall,
-      theme: danger ? TDButtonTheme.danger : TDButtonTheme.primary,
-      onTap: onTap,
+    return TButton(
+      child: Text(text),
+      variant: TButtonVariant.text,
+      size: TButtonSize.extraSmall,
+      colorPreset:
+          danger ? TButtonColorPreset.danger : TButtonColorPreset.primary,
+      onPressed: onTap,
     );
   }
 
   /// 「查看原因」：展示失败阶段 / 原因 / 建议（对应桌面版的失败原因面板）。
   void _showFailureDetail(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => TDConfirmDialog(
+    TDialog.show<void>(
+      context,
+      dialog: TConfirmDialog(
         title: '失败原因',
+        buttonText: '知道了',
         contentWidget: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

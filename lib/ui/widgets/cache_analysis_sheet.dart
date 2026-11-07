@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/formatter.dart';
@@ -23,11 +22,13 @@ Future<int?> showCacheAnalysisSheet(
     return null;
   }
   // 官方弹层：面板骨架（圆角、拖拽、关闭按钮、高度约束）交给 TDesign
-  return Navigator.of(context).push<int>(TDSlidePopupRoute<int>(
-    builder: (_) => TDPopupBottomDisplayPanel(
+  final handle = TPopup.show(
+    context,
+    options: TPopupOptions.bottom(
       child: _CacheAnalysisSheet(manager: manager, groups: groups),
     ),
-  ));
+  );
+  return handle.result as Future<int?>;
 }
 
 class _CacheAnalysisSheet extends StatefulWidget {
@@ -151,27 +152,17 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
 
   Widget _buildGroup(CacheGroup group) {
     final checked = _selected.contains(group.key);
-    // 官方 TDCell：右侧占用统计用 note 槽位，勾选框用 leftIconWidget 槽位
-    return TDCell(
-      title: group.label,
-      description: group.description,
-      note: '${group.fileCount} 个 · ${formatBytes(group.bytes)}',
-      noteMaxLine: 1,
-      leftIconWidget: TdCheckboxField(
+    // 官方 TCell：右侧占用统计用 note 槽位，勾选框用 prefix 槽位
+    return TCell(
+      title: Text(group.label, style: TdText.bodyMedium),
+      subtitle: Text(group.description, style: TdText.bodySmall),
+      note: Text('${group.fileCount} 个 · ${formatBytes(group.bytes)}',
+          style: TdText.bodyMedium),
+      prefix: TdCheckboxField(
         checked: checked,
         onChanged: (_) => _toggle(group),
       ),
-      hover: false,
-      bordered: false,
-      style: TDCellStyle(
-        context: context,
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        backgroundColor: Colors.transparent,
-        titleStyle: TdText.bodyMedium,
-        descriptionStyle: TdText.bodySmall,
-        noteStyle: TdText.bodyMedium,
-      ),
-      onClick: (cell) => _toggle(group),
+      onTap: () => _toggle(group),
     );
   }
 
@@ -226,13 +217,15 @@ class _CacheAnalysisSheetState extends State<_CacheAnalysisSheet> {
             style: TdText.bodySmall,
           ),
           const SizedBox(height: TdSpacer.xs),
-          TDButton(
-            text: _busy ? '清理中…' : '清理选中',
-            theme: TDButtonTheme.primary,
-            size: TDButtonSize.large,
-            isBlock: true,
-            disabled: !hasSelection || _busy,
-            onTap: () => unawaited(_clean()),
+          SizedBox(
+            width: double.infinity,
+            child: TButton(
+              child: Text(_busy ? '清理中…' : '清理选中'),
+              size: TButtonSize.large,
+              colorPreset: TButtonColorPreset.primary,
+              onPressed:
+                  !hasSelection || _busy ? null : () => unawaited(_clean()),
+            ),
           ),
         ],
       ),
