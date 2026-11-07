@@ -54,6 +54,32 @@ android {
                 "lib/mips/**",
                 "lib/mips64/**",
             )
+            // ---------------- 精简包（评审第 27 项） ----------------
+            //
+            // APK 体积几乎全被 FFmpeg 吃掉（arm64-v8a 下约 42 MB / 总体 64 MB）。
+            // 但相当一部分用户只想要「下载 + 直接播放」，转码、GIF、H.265 都用不上。
+            //
+            // 做成**显式开关**而不是 productFlavors，是有意为之：
+            // 一旦声明了 flavor，`flutter build apk` 就必须带 --flavor，
+            // 本仓库现有的 CI、tools/build_apk.ps1、tools/publish_release.ps1
+            // 以及所有用户的构建命令都会立刻失效。这个代价不该由一个 P3 优化来付。
+            //
+            // 用法：tools/build_lite.ps1（或手工加 -Pdownkyi.lite=true）
+            // 不传该属性时，下面这个分支不会执行，构建行为与以前完全一致。
+            if ((project.findProperty("downkyi.lite") as String?)?.toBoolean() == true) {
+                excludes += setOf(
+                    "lib/arm64-v8a/libavcodec.so",
+                    "lib/arm64-v8a/libavdevice.so",
+                    "lib/arm64-v8a/libavfilter.so",
+                    "lib/arm64-v8a/libavformat.so",
+                    "lib/arm64-v8a/libavutil.so",
+                    "lib/arm64-v8a/libpostproc.so",
+                    "lib/arm64-v8a/libswresample.so",
+                    "lib/arm64-v8a/libswscale.so",
+                    "lib/arm64-v8a/libffmpegkit.so",
+                    "lib/arm64-v8a/libffmpegkit_abidetect.so",
+                )
+            }
         }
     }
 }

@@ -2,7 +2,7 @@
 library;
 
 import '../core/constants.dart';
-import '../core/link_parser.dart';
+import '../bili/link_parser.dart';
 
 /// 可长期跟踪的订阅类型。
 ///

@@ -5,11 +5,12 @@ import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'core/logger.dart';
-import 'data/bili_api.dart';
+import 'bili/bili_api.dart';
 import 'data/http_client.dart';
 import 'data/settings_store.dart';
 import 'data/subscription_dao.dart';
 import 'download/download_manager.dart';
+import 'download/download_session.dart';
 import 'native/bridge.dart';
 import 'state/login_controller.dart';
 import 'state/parse_controller.dart';
@@ -29,6 +30,12 @@ Future<void> main() async {
 
   final manager = DownloadManager(settings: settings, api: api);
   await manager.init();
+
+  // 进程被系统回收会留下「显示下载中、实际没在下载」的任务（数据库里还是 running），
+  // 启动时统一重新入队——分片文件还在，会接着断点续传，不丢已下载的数据。
+  await DownloadSession.instance.recoverInterrupted(manager);
+  // 前台服务时长预算守护（Android 15+ 对 dataSync 有累计运行时长上限）
+  DownloadSession.instance.start(manager);
 
   final login = LoginController(api: api, settings: settings);
   final parse = ParseController(api: api, manager: manager, settings: settings);

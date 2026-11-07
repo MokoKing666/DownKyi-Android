@@ -1,4 +1,4 @@
-import 'package:downkyi/core/link_parser.dart';
+import 'package:downkyi/bili/link_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 链接识别测试。

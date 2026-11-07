@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
-import '../../data/models.dart';
+import '../../bili/models.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
 import '../widgets/download_options_sheet.dart';
@@ -83,13 +83,9 @@ class MediaListPage extends StatelessWidget {
                             ? '${item.bvid}${item.epId == null ? '' : ' · ep${item.epId}'}'
                             : item.ownerName,
                         durationMs: item.durationMs,
-                        leading: TDCheckbox(
+                        leading: TdCheckboxField(
                           checked: parse.isBatchSelected(item),
-                          size: TDCheckBoxSize.small,
-                          insetSpacing: 0,
-                          showDivider: false,
-                          onCheckBoxChanged: (checked) =>
-                              parse.toggleBatchItem(item),
+                          onChanged: (checked) => parse.toggleBatchItem(item),
                         ),
                         onTap: () => parse.toggleBatchItem(item),
                       );

@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../bili/models.dart';
 import '../core/constants.dart';
 import '../core/logger.dart';
-import 'models.dart';
 
 class ApiException implements Exception {
   ApiException(this.code, this.message, [this.url = '']);

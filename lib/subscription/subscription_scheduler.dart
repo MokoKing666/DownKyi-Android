@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:workmanager/workmanager.dart';
 
 import '../core/logger.dart';
-import '../data/bili_api.dart';
+import '../bili/bili_api.dart';
 import '../data/http_client.dart';
 import '../data/settings_store.dart';
 import '../data/subscription_dao.dart';

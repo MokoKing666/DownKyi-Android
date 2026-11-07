@@ -4,7 +4,7 @@ import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../../core/constants.dart';
 import '../../core/formatter.dart';
-import '../../data/models.dart';
+import '../../bili/models.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
 import '../widgets/download_options.dart';
@@ -123,15 +123,12 @@ class VideoDetailPage extends StatelessWidget {
           for (var index = 0; index < video.pages.length; index++)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
-              child: TDCheckbox(
+              child: TdCheckboxField(
                 key: ValueKey<String>('page_$index'),
                 title: video.pages[index].part,
                 subTitle: formatDuration(video.pages[index].durationMs),
                 checked: parse.selectedPages.contains(index),
-                size: TDCheckBoxSize.small,
-                insetSpacing: 0,
-                showDivider: false,
-                onCheckBoxChanged: (checked) {
+                onChanged: (checked) {
                   parse.togglePage(index);
                   if (checked && parse.selectedPages.length == 1) {
                     parse.loadQualities();

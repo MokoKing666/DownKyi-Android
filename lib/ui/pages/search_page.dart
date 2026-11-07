@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
-import '../../data/bili_api.dart';
+import '../../bili/bili_api.dart';
 import '../../data/http_client.dart';
-import '../../data/models.dart';
+import '../../bili/models.dart';
 import '../../state/parse_controller.dart';
 import '../td.dart';
 import '../widgets/video_card.dart';
@@ -138,24 +138,14 @@ class _SearchPageState extends State<SearchPage> {
       child: Row(
         children: <Widget>[
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: TdPalette.gray1,
-                borderRadius: BorderRadius.circular(TdRadius.medium),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: TdSpacer.small),
-              child: TextField(
-                controller: _controller,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => unawaited(_search()),
-                style: TdText.bodyMedium,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintText: '搜索视频 / UP 主投稿',
-                  hintStyle:
-                      TextStyle(color: TdPalette.textPlaceholder, fontSize: 14),
-                ),
-              ),
+            // 官方搜索框，替代自绘的容器 + TextField
+            child: TDSearchBar(
+              controller: _controller,
+              placeHolder: '搜索视频 / UP 主投稿',
+              style: TDSearchStyle.square,
+              backgroundColor: TdPalette.gray1,
+              padding: EdgeInsets.zero,
+              onSubmitted: (_) => unawaited(_search()),
             ),
           ),
           const SizedBox(width: TdSpacer.small),
@@ -172,7 +162,12 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const Center(
+        child:
+            TDLoading(size: TDLoadingSize.medium, icon: TDLoadingIcon.circle),
+      );
+    }
     final error = _error;
     if (error != null) {
       return TdEmptyView(
@@ -211,12 +206,9 @@ class _SearchPageState extends State<SearchPage> {
               ? item.bvid
               : '${item.ownerName} · ${item.bvid}',
           durationMs: item.durationMs,
-          leading: TDCheckbox(
+          leading: TdCheckboxField(
             checked: _selected.contains(item.bvid),
-            size: TDCheckBoxSize.small,
-            insetSpacing: 0,
-            showDivider: false,
-            onCheckBoxChanged: (_) => _toggle(item),
+            onChanged: (_) => _toggle(item),
           ),
           // 点整行 = 直接解析这个视频（单下载）；批量靠左侧复选框
           onTap: () => unawaited(_openVideo(item)),
