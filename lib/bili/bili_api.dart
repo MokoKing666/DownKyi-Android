@@ -681,7 +681,10 @@ class BiliApi {
       for (final item in asList(source)) {
         final map = asMap(item);
         final meta = asMap(map['meta']);
-        final seasonId = asInt(meta['season_id']);
+        // 「系列」条目的 id 在 series_id 字段里；两种都走 /lists/{id} 入口
+        final seasonId = asInt(meta['season_id']) != 0
+            ? asInt(meta['season_id'])
+            : asInt(meta['series_id']);
         if (seasonId == 0) continue;
         result.add(SeasonSummary(
           seasonId: seasonId,
@@ -766,16 +769,10 @@ class BiliApi {
     final list = asMap(data['list']);
     final items = <MediaItem>[];
     for (final item in asList(list['vlist'])) {
-      final map = asMap(item);
-      items.add(MediaItem(
-        bvid: asString(map['bvid']),
-        cid: asInt(map['cid']),
-        aid: asInt(map['aid']),
-        title: asString(map['title'], '未命名'),
-        cover: normalizeUrl(asString(map['pic'])),
-        durationMs: asInt(map['duration']) * 1000,
-        ownerName: asString(map['author']),
-      ));
+      // 统一走 MediaItem.fromJson：空间投稿流里会混入「合集」条目
+      // （带 meta / season_id，对应桌面版的 publication 识别），
+      // 且 vlist 的 duration 是 "mm:ss" 字符串，需要冒号时长解析。
+      items.add(MediaItem.fromJson(asMap(item)));
     }
     final pageInfo = asMap(data['page']);
     return BatchResult(

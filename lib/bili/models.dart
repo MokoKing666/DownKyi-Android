@@ -24,6 +24,38 @@ Map<String, dynamic> asMap(dynamic value) {
 List<dynamic> asList(dynamic value) =>
     value is List ? value : const <dynamic>[];
 
+/// 解析时长字段，统一成毫秒。
+///
+/// 接口里有三种形态：秒（小整数）、毫秒（大整数）、
+/// 以及 "mm:ss" / "h:mm:ss" 字符串（空间投稿流 vlist 的 duration）。
+/// 过去 `asInt("5:32")` 恒为 0，空间列表的时长一直是空的
+/// （对应桌面版 v1.4.0「Parse persisted colon durations」）。
+int parseDurationMs(dynamic value) {
+  if (value is num) {
+    final raw = value.toInt();
+    return raw > 0 && raw < 100000 ? raw * 1000 : raw;
+  }
+  final text = asString(value).trim();
+  if (text.isEmpty) return 0;
+  final asNumber = int.tryParse(text);
+  if (asNumber != null) return parseDurationMs(asNumber);
+  final parts = text.split(':');
+  if (parts.length >= 2 && parts.length <= 3) {
+    var seconds = 0;
+    var ok = true;
+    for (final part in parts) {
+      final piece = int.tryParse(part.trim());
+      if (piece == null) {
+        ok = false;
+        break;
+      }
+      seconds = seconds * 60 + piece;
+    }
+    if (ok && seconds > 0) return seconds * 1000;
+  }
+  return 0;
+}
+
 /// HTTP url 补全协议
 String normalizeUrl(String url) {
   if (url.isEmpty) return url;
@@ -314,7 +346,11 @@ class DashInfo {
   }
 }
 
-/// 批量列表里的单个条目
+/// 批量列表里的单个条目。
+///
+/// [seasonId] > 0 表示这不是单个视频，而是**合集条目**（B 站空间投稿流里
+/// 混入的「合集」，带 meta 封面与集数，见桌面版的 publication 识别）：
+/// 不可勾选下载，点击应进入合集列表。
 class MediaItem {
   const MediaItem({
     required this.bvid,
@@ -327,6 +363,8 @@ class MediaItem {
     this.btype = 'video',
     this.epId,
     this.selected = true,
+    this.seasonId = 0,
+    this.epCount = 0,
   });
 
   final String bvid;
@@ -340,6 +378,15 @@ class MediaItem {
   final int? epId;
   final bool selected;
 
+  /// 合集 id（0 = 普通视频条目）
+  final int seasonId;
+
+  /// 合集的集数（仅合集条目有效）
+  final int epCount;
+
+  /// 是否是合集条目（应跳转合集列表而不是直接下载）
+  bool get isCollection => seasonId > 0;
+
   MediaItem copyWith({bool? selected}) => MediaItem(
         bvid: bvid,
         cid: cid,
@@ -351,6 +398,8 @@ class MediaItem {
         btype: btype,
         epId: epId,
         selected: selected ?? this.selected,
+        seasonId: seasonId,
+        epCount: epCount,
       );
 
   /// 从列表接口的多种形态里取 cid。
@@ -377,22 +426,29 @@ class MediaItem {
   factory MediaItem.fromJson(Map<String, dynamic> json,
       {String btype = 'video'}) {
     final owner = asMap(json['owner'] ?? json['upper']);
-    final durationRaw = asInt(json['duration']);
-    // 普通视频接口返回秒，部分接口返回毫秒
-    final durationMs = durationRaw > 0 && durationRaw < 100000
-        ? durationRaw * 1000
-        : durationRaw;
+    final durationMs = parseDurationMs(json['duration']);
+    // 空间投稿流里的「合集」条目：带 meta（封面 / 集数）与 season_id
+    final meta = asMap(json['meta']);
+    final seasonId = asInt(json['season_id']) != 0
+        ? asInt(json['season_id'])
+        : asInt(meta['season_id']);
     return MediaItem(
       bvid: asString(json['bvid']),
       cid: resolveCid(json),
       aid: asInt(json['aid'] ?? json['id']),
-      title: asString(json['title'], '未命名'),
-      cover: normalizeUrl(asString(json['cover'] ?? json['pic'])),
+      title: seasonId > 0
+          ? asString(meta['title'], asString(json['title'], '未命名'))
+          : asString(json['title'], '未命名'),
+      cover: normalizeUrl(seasonId > 0
+          ? asString(meta['cover'], asString(json['cover'] ?? json['pic']))
+          : asString(json['cover'] ?? json['pic'])),
       durationMs: durationMs,
       ownerName:
           asString(owner['name'] ?? json['author'] ?? json['upper_name']),
       btype: btype,
       epId: json['ep_id'] == null ? null : asInt(json['ep_id']),
+      seasonId: seasonId,
+      epCount: asInt(meta['ep_count']),
     );
   }
 }

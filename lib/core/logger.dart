@@ -12,6 +12,10 @@ class AppLog {
     _append('D', tag, message);
   }
 
+  static void w(String tag, Object? message) {
+    _append('W', tag, message);
+  }
+
   static void e(String tag, Object? message, [Object? error]) {
     _append('E', tag, error == null ? message : '$message | $error');
   }

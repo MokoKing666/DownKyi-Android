@@ -462,8 +462,65 @@ class _ParsePageState extends State<ParsePage> {
       ),
     );
     if (mid == null || mid.isEmpty) return;
+    final uid = int.tryParse(mid);
+    if (uid == null || uid <= 0) {
+      if (!mounted) return;
+      tdToastError(context, 'UID 需要是数字');
+      return;
+    }
     if (!mounted) return;
-    await _openLink('https://space.bilibili.com/$mid');
+    // 「UP 主合集」就该直接列合集：seasons() 聚合「合集」与「系列」，
+    // 选中后走 /lists/{id} 通用解析；该 UP 主没有合集时退回投稿列表。
+    final api = context.read<ParseController>().api;
+    List<SeasonSummary> seasons;
+    try {
+      tdLoadingShow(context, text: '读取合集');
+      seasons = await api.seasons(uid);
+      tdLoadingHide();
+    } catch (error) {
+      tdLoadingHide();
+      if (!mounted) return;
+      tdToastError(context, '读取合集失败：${_describeError(error)}');
+      return;
+    }
+    if (!mounted) return;
+    if (seasons.isEmpty) {
+      tdToast(context, '该 UP 主没有合集，已打开投稿列表');
+      await _openLink('https://space.bilibili.com/$uid');
+      return;
+    }
+    final selected = await showModalBottomSheet<SeasonSummary>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => TDPopupBottomDisplayPanel(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('选择合集', style: TdText.titleSmall),
+            const SizedBox(height: TdSpacer.small),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: <Widget>[
+                  for (final season in seasons)
+                    TDCell(
+                      title: season.name,
+                      note: '${season.total} 个视频',
+                      arrow: true,
+                      onClick: (cell) => Navigator.of(sheetContext).pop(season),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await _openLink(
+        'https://space.bilibili.com/$uid/lists/${selected.seasonId}');
   }
 
   Future<void> _runBatch(

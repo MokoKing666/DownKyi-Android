@@ -56,6 +56,9 @@ class DownloadTask {
     this.audioPath,
     this.outputPath,
     this.error,
+    this.errorStage,
+    this.errorHint,
+    this.note,
     this.videoSegments,
     this.audioSegments,
     this.fileName = '',
@@ -73,6 +76,7 @@ class DownloadTask {
     this.embedMetadata,
     this.mergeAv,
     this.saveToGallery,
+    this.expandPages = false,
     this.engine = '',
     this.aria2Dir = '',
     this.aria2GidsJson = '',
@@ -109,6 +113,16 @@ class DownloadTask {
   String? audioPath;
   String? outputPath;
   String? error;
+
+  /// 失败阶段（账号 / 解析 / 下载 / 封装 / 写入 / 网络 / Aria2）。
+  /// 与 [errorHint] 一起构成「查看原因」弹层的内容，见 `failure_info.dart`。
+  String? errorStage;
+
+  /// 失败后的处置建议（例如「请在『我的』页登录后重试」）
+  String? errorHint;
+
+  /// 非失败的提示备注（例如「已降档：4K 超清 → 1080P 高清」），UI 以浅色展示。
+  String? note;
   String? videoSegments;
   String? audioSegments;
   int createdAt;
@@ -153,6 +167,11 @@ class DownloadTask {
 
   /// 是否保存到系统相册
   bool? saveToGallery;
+
+  /// 批量下载的多 P 展开标记：任务启动时若视频有多个分 P，
+  /// 把其余分 P 补建成同参数任务（见 DownloadManager._expandPages）。
+  /// 单视频解析页的逐 P 任务不带此标记。
+  bool expandPages;
 
   /// 执行引擎快照：'builtin' | 'aria2'。
   /// 重启恢复、暂停、继续都按它来，跟随后改的全局引擎设置。
@@ -273,6 +292,9 @@ class DownloadTask {
         'audio_path': audioPath,
         'output_path': outputPath,
         'error': error,
+        'error_stage': errorStage,
+        'error_hint': errorHint,
+        'note': note,
         'video_segments': videoSegments,
         'audio_segments': audioSegments,
         'file_name': fileName,
@@ -292,6 +314,7 @@ class DownloadTask {
         'merge_av': mergeAv == null ? null : (mergeAv! ? 1 : 0),
         'save_to_gallery':
             saveToGallery == null ? null : (saveToGallery! ? 1 : 0),
+        'expand_pages': expandPages ? 1 : 0,
         'engine': engine,
         'aria2_dir': aria2Dir,
         'aria2_gids': aria2GidsJson,
@@ -325,6 +348,9 @@ class DownloadTask {
         audioPath: map['audio_path'] as String?,
         outputPath: map['output_path'] as String?,
         error: map['error'] as String?,
+        errorStage: map['error_stage'] as String?,
+        errorHint: map['error_hint'] as String?,
+        note: map['note'] as String?,
         videoSegments: map['video_segments'] as String?,
         audioSegments: map['audio_segments'] as String?,
         fileName: (map['file_name'] as String?) ?? '',
@@ -342,6 +368,7 @@ class DownloadTask {
         embedMetadata: _intToBool(map['embed_metadata']),
         mergeAv: _intToBool(map['merge_av']),
         saveToGallery: _intToBool(map['save_to_gallery']),
+        expandPages: ((map['expand_pages'] as int?) ?? 0) == 1,
         engine: (map['engine'] as String?) ?? '',
         aria2Dir: (map['aria2_dir'] as String?) ?? '',
         aria2GidsJson: (map['aria2_gids'] as String?) ?? '',

@@ -36,19 +36,20 @@ class MediaListPage extends StatelessWidget {
                     children: <Widget>[
                       Expanded(
                         child: Text(
-                          '共 ${batch.items.length} 个视频，已选 ${parse.selectedCount}',
+                          '共 ${batch.items.length} 个视频，已选 ${parse.selectedCount}'
+                          '（长按可连续选择）',
                           style: TdText.bodySmall,
                         ),
                       ),
                       TDButton(
-                        text: parse.selectedCount == batch.items.length
+                        text: parse.selectedCount == parse.selectableCount
                             ? '全不选'
                             : '全选',
                         type: TDButtonType.text,
                         size: TDButtonSize.extraSmall,
                         theme: TDButtonTheme.primary,
                         onTap: () => parse.selectAllBatch(
-                            parse.selectedCount != batch.items.length),
+                            parse.selectedCount != parse.selectableCount),
                       ),
                     ],
                   ),
@@ -76,18 +77,32 @@ class MediaListPage extends StatelessWidget {
                         );
                       }
                       final item = batch.items[index];
-                      return VideoInfoTile(
-                        title: item.title,
-                        cover: item.cover,
-                        subtitle: item.ownerName.isEmpty
-                            ? '${item.bvid}${item.epId == null ? '' : ' · ep${item.epId}'}'
-                            : item.ownerName,
-                        durationMs: item.durationMs,
-                        leading: TdCheckboxField(
-                          checked: parse.isBatchSelected(item),
-                          onChanged: (checked) => parse.toggleBatchItem(item),
+                      // 合集条目（空间投稿流里的 publication）：不可勾选，
+                      // 点击进入合集列表
+                      if (item.isCollection) {
+                        return VideoInfoTile(
+                          title: item.title,
+                          cover: item.cover,
+                          subtitle: '合集 · ${item.epCount} 集',
+                          durationMs: item.durationMs,
+                          onTap: () => _openCollection(context, parse, item),
+                        );
+                      }
+                      return GestureDetector(
+                        onLongPress: () => parse.longPressBatchItem(index),
+                        child: VideoInfoTile(
+                          title: item.title,
+                          cover: item.cover,
+                          subtitle: item.ownerName.isEmpty
+                              ? '${item.bvid}${item.epId == null ? '' : ' · ep${item.epId}'}'
+                              : item.ownerName,
+                          durationMs: item.durationMs,
+                          leading: TdCheckboxField(
+                            checked: parse.isBatchSelected(item),
+                            onChanged: (checked) => parse.toggleBatchItem(item),
+                          ),
+                          onTap: () => parse.toggleBatchItem(item),
                         ),
-                        onTap: () => parse.toggleBatchItem(item),
                       );
                     },
                   ),
@@ -111,6 +126,26 @@ class MediaListPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 打开合集条目：保存现场 → 加载合集 → 压入新的列表页 → 返回后恢复现场。
+  Future<void> _openCollection(
+      BuildContext context, ParseController parse, MediaItem item) async {
+    final saved = parse.saveBatchState();
+    tdLoadingShow(context, text: '加载合集');
+    await parse.openCollection(item);
+    tdLoadingHide();
+    if (!context.mounted) return;
+    if (parse.batch?.seasonId != item.seasonId) {
+      tdToastError(context, '合集加载失败：${parse.error ?? '未知错误'}');
+      parse.restoreBatchState(saved);
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const MediaListPage()),
+    );
+    if (!context.mounted) return;
+    parse.restoreBatchState(saved);
   }
 
   Future<void> _download(BuildContext context, ParseController parse) async {

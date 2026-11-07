@@ -222,6 +222,7 @@ class Aria2Client {
     required String userAgent,
     String? cookie,
     int split = 16,
+    String? maxDownloadLimit,
   }) {
     final connections = split.clamp(1, 16);
     return <String, dynamic>{
@@ -235,6 +236,9 @@ class Aria2Client {
       'auto-file-renaming': 'false',
       'referer': referer,
       'user-agent': userAgent,
+      // 限速（如 '512K'）：对应设置里的「下载限速」
+      if (maxDownloadLimit != null && maxDownloadLimit.isNotEmpty)
+        'max-download-limit': maxDownloadLimit,
       if (cookie != null && cookie.isNotEmpty)
         'header': <String>['Cookie: $cookie'],
     };

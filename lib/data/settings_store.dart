@@ -48,6 +48,7 @@ class SettingsStore extends ChangeNotifier {
   static const String _kArchiveEnabled = 'archive_enabled';
   static const String _kAiSubtitle = 'ai_subtitle_strategy';
   static const String _kEmbedMetadata = 'embed_metadata';
+  static const String _kSpeedLimit = 'speed_limit_kbps';
 
   static const String defaultAria2Url = 'http://127.0.0.1:6800/jsonrpc';
 
@@ -134,6 +135,20 @@ class SettingsStore extends ChangeNotifier {
   /// 属于 FFmpeg 重封装，兼容性风险见 MuxEngine 的注释。
   bool embedMetadata = false;
 
+  /// 内置下载器的总速度上限（KB/s）。0 = 不限（默认）。
+  /// 对应桌面版的「内置下载限速」；Aria2 引擎会翻译成 max-download-limit。
+  int speedLimitKbps = 0;
+
+  /// 限速可选项（KB/s），0 表示不限
+  static const List<int> speedLimitOptions = <int>[
+    0,
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ];
+
   bool _loaded = false;
 
   bool get loaded => _loaded;
@@ -194,6 +209,7 @@ class SettingsStore extends ChangeNotifier {
     aiSubtitleStrategy =
         AiSubtitleStrategy.fromName(prefs.getString(_kAiSubtitle));
     embedMetadata = prefs.getBool(_kEmbedMetadata) ?? false;
+    speedLimitKbps = prefs.getInt(_kSpeedLimit) ?? 0;
     preferenceMode = PreferenceMode.fromName(prefs.getString(_kPreferenceMode));
     smartAutoSelect = prefs.getBool(_kSmartAuto) ?? true;
     subtitleLanguages =
@@ -251,6 +267,7 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setBool(_kArchiveEnabled, archiveEnabled);
     await prefs.setString(_kAiSubtitle, aiSubtitleStrategy.name);
     await prefs.setBool(_kEmbedMetadata, embedMetadata);
+    await prefs.setInt(_kSpeedLimit, speedLimitKbps);
     await prefs.setBool(_kSmartAuto, smartAutoSelect);
     await prefs.setString(_kSubtitleLangs, jsonEncode(subtitleLanguages));
     await prefs.setString(_kDanmakuStyle, jsonEncode(danmakuStyle.toJson()));

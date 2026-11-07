@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import '../core/logger.dart';
 import '../data/http_client.dart';
+import 'speed_limiter.dart';
 
 /// 取消令牌：暂停 / 删除任务时置位，下载循环会尽快退出。
 class CancelToken {
@@ -19,11 +20,25 @@ class SegmentResult {
     required this.totalBytes,
     required this.downloadedBytes,
     required this.supportRange,
+    this.fallbackReason,
   });
 
   final int totalBytes;
   final int downloadedBytes;
   final bool supportRange;
+
+  /// 回退单线程下载时的原因（探测证据），正常分片下载为 null。
+  final String? fallbackReason;
+}
+
+/// 服务器忽略了 Range 请求、返回了完整文件。
+///
+/// 响应体本身就是完整文件，由 [SegmentDownloader.download] 统一回退成
+/// 单线程下载消费掉，而不是把整文件错当分片追加出损坏产物。
+class _RangeIgnored implements Exception {
+  _RangeIgnored(this.response);
+
+  final HttpClientResponse response;
 }
 
 /// HTTP 错误分类：决定「立刻失败 / 退避重试 / 刷新 URL」。
@@ -91,6 +106,7 @@ class SegmentDownloader {
     this.responseTimeout = defaultResponseTimeout,
     this.maxAttempts = defaultMaxAttempts,
     this.baseBackoff = defaultBaseBackoff,
+    this.limiter,
   }) : _url = url;
 
   String _url;
@@ -98,6 +114,9 @@ class SegmentDownloader {
   final int segmentCount;
   final int concurrency;
   final String? referer;
+
+  /// 限速器（所有分片共用一个实例，限的是整个任务的总速度）
+  final SpeedLimiter? limiter;
 
   /// 上次下载时记录的签名（总大小:分片大小:分片数），不一致则丢弃旧分片。
   final String resumeState;
@@ -158,19 +177,44 @@ class SegmentDownloader {
       _total = total;
 
       if (probe.pending != null) {
-        // 不支持分片：直接消费已有响应
-        final written = await _consumeWhole(probe.pending!, onProgress, token);
+        // 探测收到 200：服务器不支持 Range。保留证据后回退单线程下载，
+        // 产物写入 .part0（中断后保留，支持续传的服务器上可从断点继续）。
+        const reason = '服务器不支持 Range（探测返回 200），已回退单线程下载';
+        AppLog.w('Download', reason);
+        final (written, completed) = await _consumeStream(
+          probe.pending!,
+          onProgress,
+          token,
+          expectedLength: probe.pending!.headers.contentLength,
+        );
         onTotal(written);
+        if (!completed && !token.isCancelled) {
+          // 服务端提前断流：宁可报错重试，也不能把半截文件当成功
+          throw ApiException(-1, '下载不完整（收到 $written 字节），请重试', _url);
+        }
+        if (completed) await _finishSequential();
         return SegmentResult(
-            totalBytes: written, downloadedBytes: written, supportRange: false);
+            totalBytes: written,
+            downloadedBytes: written,
+            supportRange: false,
+            fallbackReason: reason);
       }
 
       onTotal(total);
       if (total <= 0) {
-        final written = await _downloadSequential(client, onProgress, token);
+        // 没拿到文件长度：单线程下载（.part0 支持断点续传）
+        final (written, completed) =
+            await _downloadSequential(client, onProgress, token);
         onTotal(written);
+        if (!completed && !token.isCancelled) {
+          throw ApiException(-1, '下载不完整（收到 $written 字节），请重试', _url);
+        }
+        if (completed) await _finishSequential();
         return SegmentResult(
-            totalBytes: written, downloadedBytes: written, supportRange: false);
+            totalBytes: written,
+            downloadedBytes: written,
+            supportRange: false,
+            fallbackReason: completed ? '服务器未返回文件长度，已用单线程下载' : null);
       }
 
       final count = math.max(1, math.min(segmentCount, 16));
@@ -213,10 +257,42 @@ class SegmentDownloader {
       }
 
       report();
-      await _runPool<_Part>(parts, concurrency, (part) async {
-        if (part.done >= part.size) return;
-        await _downloadPart(client, part, token, report);
-      });
+      _RangeIgnored? rangeIgnored;
+      try {
+        await _runPool<_Part>(parts, concurrency, (part) async {
+          if (part.done >= part.size) return;
+          await _downloadPart(client, part, token, report);
+        });
+      } on _RangeIgnored catch (error) {
+        rangeIgnored = error;
+      }
+
+      if (rangeIgnored != null) {
+        // 下载途中服务器开始忽略 Range（返回完整文件）：丢弃全部分片，
+        // 把已拿到的完整响应体回退成单线程下载落盘（对应桌面版的
+        // 「媒体拒绝 Range 时回退，顺序回退保留断点」）。
+        const reason = '下载途中服务器忽略 Range，已回退单线程下载';
+        AppLog.w('Download', reason);
+        for (final part in parts) {
+          await _safeDelete(part.path);
+        }
+        final (written, completed) = await _consumeStream(
+          rangeIgnored.response,
+          onProgress,
+          token,
+          expectedLength: _total,
+        );
+        onTotal(written);
+        if (!completed && !token.isCancelled) {
+          throw ApiException(-1, '下载不完整（收到 $written 字节），请重试', _url);
+        }
+        if (completed) await _finishSequential();
+        return SegmentResult(
+            totalBytes: written,
+            downloadedBytes: written,
+            supportRange: false,
+            fallbackReason: reason);
+      }
 
       if (token.isCancelled) {
         return SegmentResult(
@@ -284,21 +360,38 @@ class SegmentDownloader {
     }
   }
 
-  Future<int> _consumeWhole(
+  /// 顺序写入 `.part0`，完整收完后由 [_finishSequential] 改名成目标文件。
+  ///
+  /// [resumeFrom] > 0 表示从该字节数续传（追加写）；否则从头写（截断）。
+  /// 中断时保留 `.part0`，下次下载可尝试续传——对应桌面版
+  /// 「顺序回退时保留断点续传状态」。[expectedLength] > 0 时会核对总字节数，
+  /// 收不够不算完成（防止「服务端提前断开却当成功」）。
+  Future<(int, bool)> _consumeStream(
     Stream<List<int>> stream,
     void Function(int downloaded) onProgress,
-    CancelToken token,
-  ) async {
-    final file = File(filePath);
-    await file.parent.create(recursive: true);
-    final sink = file.openWrite();
-    var written = 0;
+    CancelToken token, {
+    int resumeFrom = 0,
+    int expectedLength = 0,
+  }) async {
+    final partFile = File(_partPath(0));
+    await partFile.parent.create(recursive: true);
+    final sink = partFile.openWrite(
+        mode: resumeFrom > 0 ? FileMode.append : FileMode.write);
+    var written = resumeFrom;
+    var cancelled = false;
     try {
       await for (final chunk in stream.timeout(readIdleTimeout)) {
-        if (token.isCancelled) break;
+        if (token.isCancelled) {
+          cancelled = true;
+          break;
+        }
         sink.add(chunk);
         written += chunk.length;
         onProgress(written);
+        final wait = limiter?.consume(chunk.length) ?? Duration.zero;
+        if (wait > Duration.zero) {
+          await Future<void>.delayed(wait);
+        }
       }
     } finally {
       try {
@@ -312,14 +405,56 @@ class SegmentDownloader {
         // 忽略
       }
     }
-    return written;
+    if (cancelled || token.isCancelled) return (written, false);
+    if (expectedLength > 0 && written != expectedLength) {
+      // 服务端提前断开：保留 .part0 供续传，但不能算完成
+      return (written, false);
+    }
+    return (written, true);
   }
 
-  Future<int> _downloadSequential(
+  /// 顺序单线程下载：`.part0` 已有数据时先尝试 Range 续传；
+  /// 服务器不支持（200 或起点不符）就重头下载，绝不会拼出损坏文件。
+  Future<(int, bool)> _downloadSequential(
     HttpClient client,
     void Function(int downloaded) onProgress,
-    CancelToken token,
-  ) async {
+    CancelToken token, {
+    int refreshes = 0,
+  }) async {
+    final have = await _lengthOf(_partPath(0));
+    if (have > 0) {
+      final request = await AppHttp.instance.openRequest(
+        client,
+        _uri,
+        rangeStart: have,
+        referer: referer,
+      );
+      final response = await request.close().timeout(responseTimeout);
+      final status = response.statusCode;
+      if (status == 206) {
+        final contentRange =
+            response.headers.value(HttpHeaders.contentRangeHeader);
+        final parsed =
+            contentRange == null ? null : _parseContentRange(contentRange);
+        if (parsed != null && parsed.start == have) {
+          AppLog.d('Download', '顺序下载从 $have 字节处续传');
+          return _consumeStream(response, onProgress, token, resumeFrom: have);
+        }
+        // 起点不符：当作无法续传，重头下载
+        await response.drain<void>();
+      } else if (status == 200) {
+        // 服务器忽略 Range：重头下载（数据从 0 重新写，不会拼坏）
+        return _consumeStream(response, onProgress, token);
+      } else if (classifyStatus(status) == DownloadErrorKind.urlExpired &&
+          refreshes < 3 &&
+          await _tryRefreshUrl()) {
+        return _downloadSequential(client, onProgress, token,
+            refreshes: refreshes + 1);
+      } else {
+        await response.drain<void>();
+        throw ApiException(status, 'HTTP $status', _url);
+      }
+    }
     final request =
         await AppHttp.instance.openRequest(client, _uri, referer: referer);
     final response = await request.close().timeout(responseTimeout);
@@ -328,7 +463,17 @@ class SegmentDownloader {
       throw ApiException(
           response.statusCode, 'HTTP ${response.statusCode}', _url);
     }
-    return _consumeWhole(response, onProgress, token);
+    return _consumeStream(response, onProgress, token);
+  }
+
+  /// 顺序下载完整收完后，把 `.part0` 改名成目标文件。
+  Future<void> _finishSequential() async {
+    final partFile = File(_partPath(0));
+    if (!await partFile.exists()) return;
+    if (await File(filePath).exists()) {
+      await _safeDelete(filePath);
+    }
+    await partFile.rename(filePath);
   }
 
   Future<void> _downloadPart(
@@ -363,6 +508,10 @@ class SegmentDownloader {
               throw ApiException(-1, '分片 ${part.index} 收到的数据超出了请求范围', _url);
             }
             report();
+            final wait = limiter?.consume(chunk.length) ?? Duration.zero;
+            if (wait > Duration.zero) {
+              await Future<void>.delayed(wait);
+            }
           }
           await sink.flush();
         } finally {
@@ -385,6 +534,9 @@ class SegmentDownloader {
         await Future<void>.delayed(_backoff(attempts));
       } catch (error) {
         if (token.isCancelled) return;
+
+        // 服务器忽略 Range：交给 download() 统一回退，不在这里重试
+        if (error is _RangeIgnored) rethrow;
 
         // 416：本地分片可能已经完整，核对后直接放过
         if (error is ApiException && error.code == 416) {
@@ -433,8 +585,8 @@ class SegmentDownloader {
   /// - `206`：必须带 `Content-Range`，其 START 必须等于请求的 START，
   ///   END 不能超出请求的 END，TOTAL 必须与探测结果一致；
   /// - `200`：那是**完整文件**。只有「单分片、从 0 开始、且分片长度等于总长」
-  ///   这一种情况可以接受，其余一律判为 Range 无效——否则完整文件会被
-  ///   追加进 `.part`，拼出一个损坏的大文件；
+  ///   这一种情况可以接受，其余情况抛 [_RangeIgnored]（携带响应体），
+  ///   由 download() 回退成单线程下载消费掉，绝不把完整文件追加进 `.part`；
   /// - 其它状态码交给错误分类处理。
   void _validateRange(
       HttpClientResponse response, _Part part, int requestedStart) {
@@ -445,11 +597,8 @@ class SegmentDownloader {
           part.size == _total &&
           _total > 0;
       if (!isWholeFileSinglePart) {
-        throw ApiException(
-          200,
-          '服务端忽略了 Range 请求，返回了完整文件（分片 ${part.index}），已中止以免产生损坏文件',
-          _url,
-        );
+        // 响应体就是完整文件：交给 download() 回退单线程消费
+        throw _RangeIgnored(response);
       }
       return;
     }

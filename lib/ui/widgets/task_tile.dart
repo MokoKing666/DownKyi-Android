@@ -86,6 +86,15 @@ class TaskTile extends StatelessWidget {
           ),
           const SizedBox(height: TdSpacer.small),
           _buildStatusLine(),
+          if (task.note != null && task.note!.isNotEmpty) ...<Widget>[
+            const SizedBox(height: TdSpacer.xxs),
+            Text(
+              task.note!,
+              style: TdText.bodySmall.copyWith(color: TdPalette.textSecondary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
           const SizedBox(height: TdSpacer.xs),
           TDProgress(
             type: TDProgressType.linear,
@@ -194,6 +203,9 @@ class TaskTile extends StatelessWidget {
         actions.add(_textButton('继续', onTogglePause));
         break;
       case TaskStatus.failed:
+        if (task.errorHint != null && task.errorHint!.isNotEmpty) {
+          actions.add(_textButton('查看原因', () => _showFailureDetail(context)));
+        }
         actions.add(_textButton('重试', onRetry));
         break;
       case TaskStatus.completed:
@@ -220,6 +232,28 @@ class TaskTile extends StatelessWidget {
       size: TDButtonSize.extraSmall,
       theme: danger ? TDButtonTheme.danger : TDButtonTheme.primary,
       onTap: onTap,
+    );
+  }
+
+  /// 「查看原因」：展示失败阶段 / 原因 / 建议（对应桌面版的失败原因面板）。
+  void _showFailureDetail(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => TDConfirmDialog(
+        title: '失败原因',
+        contentWidget: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (task.errorStage != null && task.errorStage!.isNotEmpty)
+              Text('失败阶段：${task.errorStage}', style: TdText.bodyMedium),
+            const SizedBox(height: TdSpacer.xs),
+            Text('原因：${task.error ?? '未知'}', style: TdText.bodySmall),
+            const SizedBox(height: TdSpacer.xs),
+            Text('建议：${task.errorHint ?? ''}', style: TdText.bodySmall),
+          ],
+        ),
+      ),
     );
   }
 }

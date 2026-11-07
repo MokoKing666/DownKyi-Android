@@ -282,6 +282,19 @@ class SettingsPage extends StatelessWidget {
                   onSelect: (value) => settings
                       .update(() => settings.taskIntervalSeconds = value),
                 ),
+                const SizedBox(height: TdSpacer.medium),
+                Text(
+                    '下载限速：${settings.speedLimitKbps == 0 ? '不限' : _speedLabel(settings.speedLimitKbps)}',
+                    style: TdText.bodyMedium),
+                const SizedBox(height: TdSpacer.xs),
+                TdChoiceGroup<int>(
+                  items: SettingsStore.speedLimitOptions,
+                  selected: settings.speedLimitKbps,
+                  labelBuilder: (value) =>
+                      value == 0 ? '不限' : _speedLabel(value),
+                  onSelect: (value) =>
+                      settings.update(() => settings.speedLimitKbps = value),
+                ),
                 const SizedBox(height: TdSpacer.xs),
                 Text(
                   '批量下载时把任务启动错开，能显著降低被 B 站风控（-412）的概率。'
@@ -645,6 +658,10 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
+
+  /// 限速档位的可读文案（KB/s 输入）
+  static String _speedLabel(int kbps) =>
+      kbps >= 1024 ? '${kbps ~/ 1024} MB/s' : '$kbps KB/s';
 
   /// 通用文本编辑弹窗
   /// 字幕语言多选。

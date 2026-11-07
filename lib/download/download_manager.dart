@@ -14,9 +14,11 @@ import '../data/http_client.dart';
 import '../bili/models.dart';
 import '../bili/subtitles.dart';
 import 'download_archive.dart';
+import 'failure_info.dart';
 import 'ffmpeg_ops.dart';
 import 'ffmpeg_service.dart';
 import 'safe_replace.dart';
+import 'speed_limiter.dart';
 import 'start_throttle.dart';
 import '../data/settings_store.dart';
 import '../data/task_dao.dart';
@@ -52,10 +54,21 @@ class _Job {
 ///   （常见用法是 NAS / 电脑上常驻 aria2）。这种模式下 App 负责下发任务与显示进度，
 ///   不参与合并与相册导出。
 class DownloadManager extends ChangeNotifier {
-  DownloadManager({required this.settings, required this.api});
+  DownloadManager({required this.settings, required this.api}) {
+    _syncSpeedLimiter();
+    settings.addListener(_syncSpeedLimiter);
+  }
 
   final SettingsStore settings;
   final BiliApi api;
+
+  /// 全局下载限速器：所有任务共享同一份速度配额（KB/s 设置变化时重建）。
+  SpeedLimiter? _speedLimiter;
+
+  void _syncSpeedLimiter() {
+    final kbps = settings.speedLimitKbps;
+    _speedLimiter = kbps > 0 ? SpeedLimiter(kbps * 1024) : null;
+  }
 
   final TaskDao _dao = TaskDao.instance;
   final List<DownloadTask> tasks = <DownloadTask>[];
@@ -181,6 +194,7 @@ class DownloadManager extends ChangeNotifier {
     String codec = 'avc',
     int? flags,
     DanmakuFormat? danmakuFormat,
+    bool expandPages = false,
   }) async {
     final effectiveFlags = flags ??
         ((settings.downloadVideo ? DownloadFlags.video : 0) |
@@ -260,6 +274,7 @@ class DownloadManager extends ChangeNotifier {
       embedMetadata: settings.embedMetadata,
       mergeAv: settings.mergeAv,
       saveToGallery: settings.saveToGallery,
+      expandPages: expandPages,
       engine: settings.downloadEngine.name,
       aria2Dir: settings.aria2Dir,
     );
@@ -426,6 +441,8 @@ class DownloadManager extends ChangeNotifier {
     }
     task.status = TaskStatus.queued;
     task.error = null;
+    task.errorStage = null;
+    task.errorHint = null;
     unawaited(_dao.update(task));
     notifyListeners();
     _pump();
@@ -443,6 +460,8 @@ class DownloadManager extends ChangeNotifier {
           task.status == TaskStatus.failed) {
         task.status = TaskStatus.queued;
         task.error = null;
+        task.errorStage = null;
+        task.errorHint = null;
         unawaited(_dao.update(task));
       }
     }
@@ -490,6 +509,8 @@ class DownloadManager extends ChangeNotifier {
   Future<void> requeue(DownloadTask task) async {
     task.status = TaskStatus.queued;
     task.error = null;
+    task.errorStage = null;
+    task.errorHint = null;
     await _dao.update(task);
     notifyListeners();
     _pump();
@@ -500,6 +521,8 @@ class DownloadManager extends ChangeNotifier {
     if (task == null) return Future<void>.value();
     task.status = TaskStatus.queued;
     task.error = null;
+    task.errorStage = null;
+    task.errorHint = null;
     task.downloadedBytes = 0;
     task.totalBytes = 0;
     task.videoSegments = '';
@@ -530,8 +553,9 @@ class DownloadManager extends ChangeNotifier {
   /// 收藏夹（cid 在 `ugc.first_cid`）、UP 主投稿与合集接口都拿不到顶层 cid，
   /// 直接用 cid=0 去请求 playurl 会返回 -400，表现为「一进去下载就请求失败」。
   /// 这里统一补一次详情查询，成功后会回写任务与数据库。
-  Future<void> _ensureCid(DownloadTask task) async {
-    if (task.cid > 0) return;
+  /// 返回本次查到的详情（没有查则为 null），供 [._expandPages] 复用。
+  Future<VideoDetail?> _ensureCid(DownloadTask task) async {
+    if (task.cid > 0) return null;
     if (task.bvid.isEmpty) {
       throw ApiException(-1, '缺少 cid 与 bvid，无法获取播放地址');
     }
@@ -542,6 +566,94 @@ class DownloadManager extends ChangeNotifier {
     }
     task.cid = detail.cid;
     await _dao.update(task);
+    return detail;
+  }
+
+  /// 批量任务的多 P 展开（对应上游「合集下载按整批展开」的语义）。
+  ///
+  /// 批量来源（收藏夹 / 合集 / 投稿……）的条目只代表视频本身，过去每条
+  /// 只建一个任务、只下第一个 P，多 P 视频的 P2 及以后被丢掉。这里在任务
+  /// 真正启动时查一次详情，把其余分 P 补建成同参数任务。逐 P 任务与重复
+  /// 展开都由任务唯一键兜底，不会重复建。
+  Future<void> _expandPages(DownloadTask task, VideoDetail? detail) async {
+    if (!task.expandPages) return;
+    task.expandPages = false; // 只展开一次
+    await _dao.update(task);
+    if (task.bvid.isEmpty ||
+        task.btype != BiliConst.typeVideo ||
+        task.epId != null) {
+      return;
+    }
+    final info = detail ?? await api.videoDetail(task.bvid);
+    final pages = info.pages;
+    if (pages.length <= 1) return;
+
+    var created = 0;
+    for (final page in pages) {
+      if (page.cid == task.cid) continue; // 当前任务对应的就是这个分 P
+      final key = buildTaskKey(
+        bvid: task.bvid,
+        cid: page.cid,
+        epId: null,
+        quality: task.quality,
+        codec: task.codec,
+        audioId: task.audioId,
+        flags: task.flags,
+        danmakuFormat: task.danmakuFormat,
+        subtitleLanguage: task.subtitleLanguages,
+      );
+      if (tasks
+          .any((task) => task.key == key && task.status != TaskStatus.failed)) {
+        continue;
+      }
+      if (settings.archiveEnabled &&
+          await DownloadArchive.instance.contains(DownloadArchive.mediaKey(
+            bvid: task.bvid,
+            cid: page.cid,
+            epId: null,
+            quality: task.quality,
+            codec: task.codec,
+            audioId: task.audioId,
+          ))) {
+        continue;
+      }
+      final sibling = DownloadTask(
+        key: key,
+        title: task.title,
+        subTitle: page.part.isEmpty ? 'P${page.page}' : page.part,
+        cover: task.cover,
+        owner: task.owner,
+        bvid: task.bvid,
+        cid: page.cid,
+        btype: task.btype,
+        durationMs: page.durationMs,
+        quality: task.quality,
+        qualityName: task.qualityName,
+        audioId: task.audioId,
+        codec: task.codec,
+        flags: task.flags,
+        danmakuFormat: task.danmakuFormat,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        // 与原任务保持同一套参数快照
+        subtitleLanguages: task.subtitleLanguages,
+        aiSubtitleStrategy: task.aiSubtitleStrategy,
+        danmakuStyleJson: task.danmakuStyleJson,
+        muxEngine: task.muxEngine,
+        embedMetadata: task.embedMetadata,
+        mergeAv: task.mergeAv,
+        saveToGallery: task.saveToGallery,
+        engine: task.engine,
+        aria2Dir: task.aria2Dir,
+      );
+      sibling.fileName = await buildFileName(sibling);
+      await _dao.insert(sibling);
+      tasks.add(sibling);
+      created++;
+    }
+    if (created > 0) {
+      AppLog.d('Task', '多 P 展开：${task.title} 补建 $created 个分 P 任务');
+      notifyListeners();
+    }
   }
 
   Future<void> _execute(_Job job) async {
@@ -551,6 +663,8 @@ class DownloadManager extends ChangeNotifier {
       if (settings.wifiOnly && !await NativeBridge.isWifi()) {
         task.status = TaskStatus.paused;
         task.error = '已开启「仅 Wi-Fi 下载」，当前不是 Wi-Fi 网络';
+        task.errorStage = '网络';
+        task.errorHint = '连接 Wi-Fi 后点「继续」，或在设置里关闭「仅 Wi-Fi 下载」';
         await _dao.update(task);
         notifyListeners();
         return;
@@ -570,8 +684,14 @@ class DownloadManager extends ChangeNotifier {
       _touch();
       await _startServiceIfNeeded();
 
-      // 收藏夹 / UP 主投稿 / 合集等来源没有 cid，补齐后才能取到播放地址
-      await _ensureCid(task);
+      // 收藏夹 / UP 主投稿 / 合集等来源没有 cid，补齐后才能取到播放地址；
+      // 批量任务顺带把多 P 视频的其余分 P 补建成任务（失败不影响本任务）
+      final detail = await _ensureCid(task);
+      try {
+        await _expandPages(task, detail);
+      } catch (error) {
+        AppLog.e('Task', '多 P 展开失败（不影响本任务）', error);
+      }
       if (token.isCancelled) return;
 
       // 只勾了封面 / 弹幕 / 字幕：既不需要播放地址，也不涉及合并，
@@ -602,6 +722,7 @@ class DownloadManager extends ChangeNotifier {
 
       final video = dash.pickVideo(task.quality, task.codec);
       final audio = dash.pickAudio(task.audioId);
+      _noteQualityFallback(task, video);
 
       if ((video == null && audio == null) ||
           (task.wantVideo && video == null)) {
@@ -653,6 +774,9 @@ class DownloadManager extends ChangeNotifier {
       task.status = TaskStatus.failed;
       task.speed = 0;
       task.error = error is ApiException ? error.message : error.toString();
+      final failure = classifyFailure(error);
+      task.errorStage = failure.stage;
+      task.errorHint = failure.hint;
       await _dao.update(task);
       notifyListeners();
     } finally {
@@ -770,6 +894,7 @@ class DownloadManager extends ChangeNotifier {
       );
       final video = dash.pickVideo(task.quality, task.codec);
       final audio = dash.pickAudio(task.audioId);
+      _noteQualityFallback(task, video);
       if (task.wantVideo && video != null) jobs['video'] = video.url;
       if (task.wantAudio && audio != null) jobs['audio'] = audio.url;
       if (jobs.isEmpty) {
@@ -786,6 +911,9 @@ class DownloadManager extends ChangeNotifier {
           out: _aria2FileName(task, entry.key),
           referer: BiliConst.webBase,
           userAgent: BiliConst.userAgent,
+          maxDownloadLimit: settings.speedLimitKbps > 0
+              ? '${settings.speedLimitKbps}K'
+              : null,
           cookie: AppHttp.instance.cookieHeader,
           split: settings.aria2Split,
         ),
@@ -914,6 +1042,8 @@ class DownloadManager extends ChangeNotifier {
       task.status = TaskStatus.paused;
       task.speed = 0;
       task.error = '无法连接 Aria2，恢复连接后点「继续」自动接管';
+      task.errorStage = 'Aria2';
+      task.errorHint = '请确认 aria2 已启动并可访问，恢复连接后点「继续」自动接管';
       await _dao.update(task);
       notifyListeners();
       return;
@@ -942,6 +1072,8 @@ class DownloadManager extends ChangeNotifier {
       task.status = TaskStatus.failed;
       task.speed = 0;
       task.error = 'Aria2 任务已失效（$failedReason）';
+      task.errorStage = 'Aria2';
+      task.errorHint = '远端任务已丢失，点「重试」会重新下发完整下载';
       await _dao.update(task);
       notifyListeners();
       return;
@@ -1028,6 +1160,8 @@ class DownloadManager extends ChangeNotifier {
       }
     } catch (error) {
       task.error = '无法连接 Aria2：$error';
+      task.errorStage = 'Aria2';
+      task.errorHint = '请确认 aria2 已启动并可访问，恢复连接后点「继续」自动接管';
       await _dao.update(task);
       notifyListeners();
       return;
@@ -1061,6 +1195,7 @@ class DownloadManager extends ChangeNotifier {
       // B 站播放地址有有效期。403 / 404 时重新解析 playurl 换新地址，
       // 下载器会保留已完成的 part 从断点继续，而不是反复重试同一个失效地址。
       refreshUrl: () => _refreshStreamUrl(job.task, streamKey),
+      limiter: _speedLimiter,
     );
     await downloader.download(
       onTotal: (total) {
@@ -1105,6 +1240,18 @@ class DownloadManager extends ChangeNotifier {
         : dash.pickVideo(task.quality, task.codec)?.url;
   }
 
+  /// 请求的清晰度不存在时 [DashInfo.pickVideo] 会静默回退——把「已降档」
+  /// 写进任务备注，用户在任务卡片上能看到实际下载的档位
+  /// （对应桌面版 v1.3.0「降档确认」的移动化实现：后台批量下载不适合弹窗打断，
+  /// 用持久化备注 + 卡片展示表达同一件事）。
+  void _noteQualityFallback(DownloadTask task, DashStream? video) {
+    if (video == null || video.id == task.quality) return;
+    final from = BiliConst.qualityNames[task.quality] ?? '清晰度 ${task.quality}';
+    final to = BiliConst.qualityNames[video.id] ?? '清晰度 ${video.id}';
+    task.note = '已降档：$from → $to（该视频没有请求的档位）';
+    AppLog.w('Task', '${task.title} ${task.note}');
+  }
+
   /// 没有 DASH 时的直链下载
   Future<void> _downloadDirect(
     DownloadTask task,
@@ -1129,7 +1276,10 @@ class DownloadManager extends ChangeNotifier {
       filePath: tmp,
       segmentCount: settings.segmentConcurrency.clamp(1, 16),
       concurrency: settings.segmentConcurrency.clamp(1, 16),
+      // 直链也要带续传签名：此前只写不读，重启后旧分片一律作废、从头重下
+      resumeState: task.videoSegments ?? '',
       refreshUrl: () => _refreshStreamUrl(task, 'direct'),
+      limiter: _speedLimiter,
     );
     await downloader.download(
       onTotal: (total) {
@@ -1171,7 +1321,7 @@ class DownloadManager extends ChangeNotifier {
             toGallery: toGallery);
       } catch (error) {
         AppLog.e('Task', '封面下载失败', error);
-        failed.add('封面');
+        failed.add('封面（${extrasFailureTag(error)}）');
       }
     }
 
@@ -1197,7 +1347,7 @@ class DownloadManager extends ChangeNotifier {
         }
       } catch (error) {
         AppLog.e('Task', '弹幕下载失败', error);
-        failed.add('弹幕');
+        failed.add('弹幕（${extrasFailureTag(error)}）');
       }
     }
 
@@ -1234,12 +1384,13 @@ class DownloadManager extends ChangeNotifier {
             );
           } catch (error) {
             AppLog.e('Task', '字幕（$code）下载失败', error);
-            failed.add('字幕·${SubtitleLanguage.labelOf(code)}');
+            failed.add(
+                '字幕·${SubtitleLanguage.labelOf(code)}（${extrasFailureTag(error)}）');
           }
         }
       } catch (error) {
         AppLog.e('Task', '字幕下载失败', error);
-        failed.add('字幕');
+        failed.add('字幕（${extrasFailureTag(error)}）');
       }
     }
 
@@ -1280,11 +1431,20 @@ class DownloadManager extends ChangeNotifier {
     }
   }
 
+  /// 把附加资源类的失败项记到任务上（顿号连接，与 _downloadExtras 一致）。
+  void _markExtraFailure(DownloadTask task, String name) {
+    final existing = task.extrasError;
+    task.extrasError =
+        existing == null || existing.isEmpty ? name : '$existing、$name';
+  }
+
   /// 可选的元数据注入（参考 BBDownAndroid）：把标题 / UP 主写进容器标签，
   /// 封面嵌为 attached_pic。
   ///
   /// 设计约束：**任何失败都不允许影响成品**。FFmpeg 不可用、封面下不来、
   /// 写出失败——全部只记日志，原文件原样保留。
+  /// 同时把失败记到 [DownloadTask.extrasError]，任务卡片会显示
+  /// 「已完成，但 标题与封面写入 未成功」——过去只写日志，用户根本不知道。
   Future<void> _injectMetadata(
     DownloadTask task,
     String output,
@@ -1294,6 +1454,7 @@ class DownloadManager extends ChangeNotifier {
     if (!BuildFlavor.supportsFfmpeg) return;
     if (FfmpegService.isBusy) {
       AppLog.d('Task', 'FFmpeg 正忙，跳过元数据注入');
+      _markExtraFailure(task, '标题与封面写入');
       return;
     }
 
@@ -1322,12 +1483,14 @@ class DownloadManager extends ChangeNotifier {
       );
       if (!result.success) {
         AppLog.e('Task', '元数据注入失败（保留原文件）');
+        _markExtraFailure(task, '标题与封面写入');
         await _deleteFile(temp);
         return;
       }
       final tempFile = File(temp);
       if (!await tempFile.exists() || await tempFile.length() < 1024) {
         AppLog.e('Task', '元数据注入产物异常（保留原文件）');
+        _markExtraFailure(task, '标题与封面写入');
         await _deleteFile(temp);
         return;
       }
@@ -1337,6 +1500,7 @@ class DownloadManager extends ChangeNotifier {
       AppLog.d('Task', '已写入元数据${coverPath != null ? '与封面' : ''}：${task.title}');
     } catch (error) {
       AppLog.e('Task', '元数据注入异常（保留原文件）', error);
+      _markExtraFailure(task, '标题与封面写入');
     } finally {
       if (coverPath != null) await _deleteFile(coverPath);
     }
@@ -1456,6 +1620,8 @@ class DownloadManager extends ChangeNotifier {
     task.merged = false;
     task.outputPath = videoPath ?? audioPath;
     task.error = '封装失败，已保留原始文件，可在「工具」里重新合并或改用 FFmpeg 转换';
+    task.errorStage = '封装';
+    task.errorHint = '设备不支持该编码的封装，可在「工具」页重新合并或改用 FFmpeg 转换';
     AppLog.e('Task', '封装失败：${task.title}');
   }
 

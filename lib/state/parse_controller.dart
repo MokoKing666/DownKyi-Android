@@ -9,6 +9,23 @@ import '../bili/models.dart';
 import '../data/settings_store.dart';
 import '../download/download_manager.dart';
 
+/// 批量列表的现场快照（见 [ParseController.saveBatchState]）。
+class BatchState {
+  const BatchState({
+    required this.batch,
+    required this.selected,
+    required this.kind,
+    required this.id,
+    required this.anchor,
+  });
+
+  final BatchResult? batch;
+  final Set<String> selected;
+  final LinkKind? kind;
+  final String? id;
+  final int? anchor;
+}
+
 /// 解析流程控制器：链接 -> 视频 / 批量列表 -> 创建下载任务。
 class ParseController extends ChangeNotifier {
   ParseController(
@@ -224,9 +241,16 @@ class ParseController extends ChangeNotifier {
   void _selectAllDefault() {
     selectedKeys.clear();
     for (final item in batch?.items ?? const <MediaItem>[]) {
+      // 合集条目不是单个视频，不参与勾选下载
+      if (item.isCollection) continue;
       selectedKeys.add(_keyOf(item));
     }
   }
+
+  /// 可勾选条目数（排除合集条目），用于「全选 / 全不选」的判断
+  int get selectableCount => (batch?.items ?? const <MediaItem>[])
+      .where((item) => !item.isCollection)
+      .length;
 
   /// 直接设置批量列表（历史 / 稍后再看等一次性数据）
   void setBatchDirectly(BatchResult? value) {
@@ -425,11 +449,44 @@ class ParseController extends ChangeNotifier {
   }
 
   void toggleBatchItem(MediaItem item) {
+    if (item.isCollection) return;
     final key = _keyOf(item);
     if (selectedKeys.contains(key)) {
       selectedKeys.remove(key);
     } else {
       selectedKeys.add(key);
+    }
+    notifyListeners();
+  }
+
+  /// 长按锚点（连续区间选择用）：第一次长按设锚点，再长按另一项则选中两者之间全部。
+  int? batchRangeAnchor;
+
+  /// 长按某一行：设置锚点，或与锚点之间连续多选（对应桌面版「连续系列选择」）。
+  void longPressBatchItem(int index) {
+    final items = batch?.items ?? const <MediaItem>[];
+    if (index < 0 || index >= items.length) return;
+    final anchor = batchRangeAnchor;
+    if (anchor == null) {
+      batchRangeAnchor = index;
+      final item = items[index];
+      if (!item.isCollection) selectedKeys.add(_keyOf(item));
+      notifyListeners();
+      return;
+    }
+    batchRangeAnchor = null;
+    selectBatchRange(anchor, index);
+  }
+
+  /// 选中 [from] 与 [to] 之间的全部可选条目（含两端，方向不限）。
+  void selectBatchRange(int from, int to) {
+    final items = batch?.items ?? const <MediaItem>[];
+    final start = from < to ? from : to;
+    final end = from < to ? to : from;
+    for (var index = start; index <= end && index < items.length; index++) {
+      final item = items[index];
+      if (item.isCollection) continue;
+      selectedKeys.add(_keyOf(item));
     }
     notifyListeners();
   }
@@ -445,6 +502,60 @@ class ParseController extends ChangeNotifier {
   }
 
   bool isBatchSelected(MediaItem item) => selectedKeys.contains(_keyOf(item));
+
+  /// 打开合集条目（空间投稿流里混入的「合集」）：加载合集内容列表并替换当前批量列表。
+  ///
+  /// 调用方（MediaListPage）在返回后用 [restoreBatchState] 恢复之前的现场，
+  /// 避免「进了合集再返回，空间列表被顶掉」。
+  Future<void> openCollection(MediaItem item) async {
+    final mid = batch?.mid ?? 0;
+    if (!item.isCollection || mid <= 0) return;
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      final result = await api.seasonArchives(
+        mid: mid,
+        seasonId: item.seasonId,
+        name: item.title,
+      );
+      sourceKind = LinkKind.season;
+      sourceId = '$mid:${item.seasonId}';
+      batch = result;
+      video = null;
+      dash = null;
+      _selectAllDefault();
+      _primeBatchDefaults();
+    } catch (exception) {
+      error =
+          exception is ApiException ? exception.message : exception.toString();
+      AppLog.e('Parse', '打开合集失败', exception);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 保存批量列表现场（进入合集前调用）
+  BatchState saveBatchState() => BatchState(
+        batch: batch,
+        selected: Set<String>.of(selectedKeys),
+        kind: sourceKind,
+        id: sourceId,
+        anchor: batchRangeAnchor,
+      );
+
+  /// 恢复 [saveBatchState] 保存的现场（从合集返回时调用）
+  void restoreBatchState(BatchState saved) {
+    batch = saved.batch;
+    selectedKeys
+      ..clear()
+      ..addAll(saved.selected);
+    sourceKind = saved.kind;
+    sourceId = saved.id;
+    batchRangeAnchor = saved.anchor;
+    notifyListeners();
+  }
 
   Future<void> loadMore() async {
     final current = batch;
@@ -542,6 +653,9 @@ class ParseController extends ChangeNotifier {
         qualityName: qualityName.isEmpty ? qualityLabel(quality) : qualityName,
         audioId: audioId,
         codec: codec,
+        // 批量条目默认只带第一个 P 的信息，启动时按视频实际分 P 展开，
+        // 免得多 P 视频的 P2 及以后被丢掉（对应上游「按整批展开」语义）
+        expandPages: true,
         flags: buildFlags(),
       );
       if (task != null) count++;

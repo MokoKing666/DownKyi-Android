@@ -101,14 +101,23 @@ void main() {
   });
 
   group('Range 严格校验（P0）', () {
-    test('服务器对分片请求忽略 Range 返回 200：必须失败，不能产出损坏文件', () async {
+    test('服务器对分片请求忽略 Range 返回 200：回退单线程下载，产出完整文件', () async {
+      // 行为变更（对应桌面版 v1.6.1「媒体拒绝 Range 时回退」）：
+      // 分片请求收到 200 = 完整文件，不再报错放弃，而是丢弃分片、
+      // 把完整响应体回退成单线程下载落盘。绝不允许把完整文件
+      // 追加进 .part 拼出损坏文件。
       behavior.size = 4000;
       behavior.ignoreRangeAfterProbe = true;
 
-      await expectLater(run(build()), throwsA(isA<ApiException>()));
+      final result = await run(build());
 
-      // 关键：绝不允许「把完整文件追加进 .part 后拼出一个更大的坏文件」
-      expect(File(output).existsSync(), isFalse, reason: '不应产出任何成品文件');
+      expect(result.supportRange, isFalse);
+      expect(result.fallbackReason, contains('忽略 Range'));
+      expect(await File(output).readAsBytes(), payload(0, 4000));
+      for (var i = 0; i < 4; i++) {
+        expect(File('$output.part$i').existsSync(), isFalse,
+            reason: '分片 $i 未被清理');
+      }
     });
 
     test('分片响应的 206 缺少 Content-Range 头：失败', () async {
@@ -241,6 +250,51 @@ void main() {
       expect(result.totalBytes, 4000);
       expect(await File(output).readAsBytes(), payload(0, 4000));
     });
+
+    test('顺序回退保留断点：.part0 已有数据且服务器支持续传时从断点继续', () async {
+      // 对应桌面版 v1.6.1「顺序回退保留断点续传状态」：
+      // 顺序下载（探测拿不到总长）中断后，.part0 保留已有字节，
+      // 重来时用 Range: bytes=N- 续传而不是从头再下。
+      behavior.size = 3000;
+      behavior.omitContentRangeOnProbeOnly = true;
+      File('$output.part0').writeAsBytesSync(payload(0, 1200));
+
+      final result = await run(build());
+
+      expect(result.supportRange, isFalse);
+      expect(await File(output).readAsBytes(), payload(0, 3000));
+      expect(behavior.ranges, contains('bytes=1200-'),
+          reason: '续传请求应带 Range: bytes=1200-');
+      expect(File('$output.part0').existsSync(), isFalse,
+          reason: '完成后 .part0 应改名成成品');
+    });
+
+    test('顺序续传请求被服务器忽略 Range：重头下载，坏的旧数据不进成品', () async {
+      behavior.size = 3000;
+      behavior.omitContentRangeOnProbeOnly = true;
+      behavior.ignoreRangeAfterProbe = true;
+      // 上次残留的 .part0 是坏数据（内容与正片不符）
+      File('$output.part0').writeAsBytesSync(List<int>.filled(1200, 7));
+
+      final result = await run(build());
+
+      expect(result.supportRange, isFalse);
+      expect(await File(output).readAsBytes(), payload(0, 3000),
+          reason: '服务器忽略 Range 时必须重头写，不能把坏数据拼进成品');
+    });
+
+    test('回退单线程时服务器提前断流：报错重试，不把半截文件当成功', () async {
+      behavior.size = 4000;
+      behavior.ignoreRangeAfterProbe = true;
+      behavior.truncateHalf = true;
+
+      await expectLater(
+        run(build()),
+        throwsA(isA<ApiException>()
+            .having((e) => e.message, 'message', contains('下载不完整'))),
+      );
+      expect(File(output).existsSync(), isFalse, reason: '半截数据不能落成成品');
+    });
   });
 
   group('读空闲超时（P1）', () {
@@ -338,6 +392,10 @@ class _FakeServer {
   /// 206 但不带 Content-Range（探测与分片都不带）
   bool omitContentRange = false;
 
+  /// 只在探测响应里省略 Content-Range（探测拿不到总长 → 顺序下载，
+  /// 但后续请求带 Content-Range，可验证顺序断点续传）
+  bool omitContentRangeOnProbeOnly = false;
+
   /// 只在分片响应里省略 Content-Range
   bool omitContentRangeAfterProbe = false;
 
@@ -424,6 +482,12 @@ Future<void> _handle(HttpRequest request, _FakeServer behavior) async {
     if (behavior.noRangeSupport ||
         (behavior.ignoreRangeAfterProbe && !wasProbe) ||
         rangeHeader == null) {
+      if (behavior.truncateHalf) {
+        // chunked（不设 Content-Length）发一半后正常结束：模拟提前断流
+        response.add(payload(0, behavior.size ~/ 2));
+        await response.close();
+        return;
+      }
       response.statusCode = HttpStatus.ok;
       response.headers.contentLength = behavior.size;
       response.add(payload(0, behavior.size));
@@ -462,7 +526,8 @@ Future<void> _handle(HttpRequest request, _FakeServer behavior) async {
         requestedEnd >= behavior.size ? behavior.size - 1 : requestedEnd;
     response.statusCode = HttpStatus.partialContent;
     final skipContentRange = behavior.omitContentRange ||
-        (behavior.omitContentRangeAfterProbe && !wasProbe);
+        (behavior.omitContentRangeAfterProbe && !wasProbe) ||
+        (behavior.omitContentRangeOnProbeOnly && wasProbe);
     if (!skipContentRange) {
       final total = (!wasProbe ? behavior.totalOverrideAfterProbe : null) ??
           behavior.totalOverride ??

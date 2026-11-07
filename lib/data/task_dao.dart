@@ -17,7 +17,7 @@ class TaskDao {
     final path = '${await getDatabasesPath()}/downkyi.db';
     final database = await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE download_task(
@@ -45,6 +45,9 @@ class TaskDao {
             audio_path TEXT,
             output_path TEXT,
             error TEXT,
+            error_stage TEXT,
+            error_hint TEXT,
+            note TEXT,
             video_segments TEXT,
             audio_segments TEXT,
             file_name TEXT,
@@ -62,6 +65,7 @@ class TaskDao {
             embed_metadata INTEGER,
             merge_av INTEGER,
             save_to_gallery INTEGER,
+            expand_pages INTEGER,
             engine TEXT,
             aria2_dir TEXT,
             aria2_gids TEXT
@@ -100,6 +104,21 @@ class TaskDao {
             'engine TEXT',
             'aria2_dir TEXT',
             'aria2_gids TEXT',
+          ];
+          for (final column in newColumns) {
+            await db.execute('ALTER TABLE download_task ADD COLUMN $column');
+          }
+        }
+        // v5：结构化失败信息（阶段 / 建议）+ 提示备注（如降档说明）
+        //   + 批量多 P 展开标记。
+        // 旧任务这些列为 NULL / 0，UI 直接显示原有的 error 文本、
+        // 批量任务不展开分 P，行为不变。
+        if (oldVersion < 5) {
+          const newColumns = <String>[
+            'error_stage TEXT',
+            'error_hint TEXT',
+            'note TEXT',
+            'expand_pages INTEGER',
           ];
           for (final column in newColumns) {
             await db.execute('ALTER TABLE download_task ADD COLUMN $column');
