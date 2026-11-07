@@ -105,3 +105,6 @@ jobs:
           files: ${{ steps.artifact.outputs.name }}
           body_path: notes.md
           generate_release_notes: false
+          # 明确把本次发布标为「最新」：不写的话 GitHub 按创建/发布时间
+          # 自动判定，补打旧版本 tag 时会出现「最新」挂在旧版本上的错位
+          make_latest: 'true'
