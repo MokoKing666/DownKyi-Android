@@ -30,7 +30,7 @@ dependencies:
 
   # FFmpeg（格式转换 / 转码 / 提取音频 / 生成 GIF）
   # ffmpeg-kit 上游已停止维护，这里用社区维护分支（API 与上游一致）
-  ffmpeg_kit_flutter_new: ^4.6.7
+  ffmpeg_kit_flutter_new: ^4.6.8
 
   # 订阅的周期后台检查（WorkManager）
   workmanager: ^0.10.10
